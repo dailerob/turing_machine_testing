@@ -13,6 +13,7 @@ Where:
 """
 
 from collections import defaultdict
+import numpy as np
 
 
 def run_turing_machine(program, halt_state='H', initial_state='A', max_steps=None, verbose=True):
@@ -27,7 +28,8 @@ def run_turing_machine(program, halt_state='H', initial_state='A', max_steps=Non
         verbose: If True, print each step
     
     Returns:
-        Tuple of (tape_dict, steps_taken, ones_count)
+        Tuple of (tape_dict, steps_taken, ones_count, history)
+        where history is a list of 5-tuples executed at each step
     """
     # Build transition table from program
     transitions = {}
@@ -39,6 +41,7 @@ def run_turing_machine(program, halt_state='H', initial_state='A', max_steps=Non
     head = 0
     state = initial_state
     steps = 0
+    history = []  # Track which 5-tuple was executed at each step
     
     if verbose:
         print(f"Starting Turing Machine simulation")
@@ -61,6 +64,9 @@ def run_turing_machine(program, halt_state='H', initial_state='A', max_steps=Non
         
         write_symbol, direction, next_state = transitions[(state, read_symbol)]
         
+        # Record the 5-tuple that was executed
+        history.append((state, read_symbol, write_symbol, direction, next_state))
+        
         if verbose:
             print(f"Step {steps + 1}: State={state}, Read={read_symbol} -> "
                   f"Write={write_symbol}, Move={direction}, Next={next_state}")
@@ -77,7 +83,71 @@ def run_turing_machine(program, halt_state='H', initial_state='A', max_steps=Non
     # Count ones on tape
     ones_count = sum(1 for v in tape.values() if v == 1)
     
-    return dict(tape), steps, ones_count
+    return dict(tape), steps, ones_count, history
+
+
+def history_to_numpy(history, state_encoding=None):
+    """
+    Convert execution history to a numpy array of shape (n_steps, 5).
+    
+    Args:
+        history: List of 5-tuples from run_turing_machine
+        state_encoding: Optional dict mapping state names to integers.
+                        If None, states are auto-encoded alphabetically.
+    
+    Returns:
+        numpy array of shape (n_steps, 5) where columns are:
+            [current_state, read, write, direction, next_state]
+        Also returns the state_encoding dict used.
+    
+    Encoding:
+        - States are encoded as integers (e.g., A=0, B=1, C=2, ...)
+        - Read/Write symbols (0, 1) remain as integers
+        - Direction: L=0, R=1
+    """
+    if not history:
+        return np.array([]).reshape(0, 5), {}
+    
+    # Build state encoding if not provided
+    if state_encoding is None:
+        all_states = set()
+        for curr, _, _, _, nxt in history:
+            all_states.add(curr)
+            all_states.add(nxt)
+        state_encoding = {state: i for i, state in enumerate(sorted(all_states))}
+    
+    # Direction encoding
+    dir_encoding = {'L': 0, 'R': 1}
+    
+    # Convert history to numpy array
+    n_steps = len(history)
+    arr = np.zeros((n_steps, 5), dtype=np.int32)
+    
+    for i, (curr_state, read, write, direction, next_state) in enumerate(history):
+        arr[i, 0] = state_encoding[curr_state]
+        arr[i, 1] = read
+        arr[i, 2] = write
+        arr[i, 3] = dir_encoding[direction]
+        arr[i, 4] = state_encoding[next_state]
+    
+    return arr, state_encoding
+
+
+def save_history_to_file(history, filepath, state_encoding=None):
+    """
+    Save execution history to a .npy file.
+    
+    Args:
+        history: List of 5-tuples from run_turing_machine
+        filepath: Path to save the numpy array (should end in .npy)
+        state_encoding: Optional dict mapping state names to integers
+    
+    Returns:
+        The state_encoding dict used
+    """
+    arr, encoding = history_to_numpy(history, state_encoding)
+    np.save(filepath, arr)
+    return encoding
 
 
 def visualize_tape(tape, head=None, width=40):
@@ -135,7 +205,7 @@ if __name__ == "__main__":
     print("\nRunning 4-State Busy Beaver")
     print("Expected: 13 ones written, 107 steps to halt\n")
     
-    tape, steps, ones = run_turing_machine(BUSY_BEAVER_4, verbose=True)
+    tape, steps, ones, history = run_turing_machine(BUSY_BEAVER_4, verbose=True)
     
     visualize_tape(tape)
     
@@ -144,3 +214,20 @@ if __name__ == "__main__":
     print(f"  Total steps: {steps}")
     print(f"  Ones on tape: {ones}")
     print(f"{'=' * 60}")
+    
+    # Demonstrate history to numpy conversion
+    print("\nConverting history to numpy array...")
+    history_array, state_encoding = history_to_numpy(history)
+    
+    print(f"Array shape: {history_array.shape}")
+    print(f"State encoding: {state_encoding}")
+    print(f"Direction encoding: L=0, R=1")
+    print(f"\nFirst 5 steps (as numpy array):")
+    print("  [curr_state, read, write, direction, next_state]")
+    print(history_array[:5])
+    print(f"\nLast 5 steps:")
+    print(history_array[-5:])
+    
+    # Save to file
+    save_history_to_file(history, "busy_beaver_history.npy")
+    print(f"\nHistory saved to 'busy_beaver_history.npy'")

@@ -220,7 +220,8 @@ class GenerativeDenseChain:
     def greedy_sample(
         self,
         state_dist: np.ndarray,
-        mask: Optional[np.ndarray] = None
+        mask: Optional[np.ndarray] = None,
+        conditional: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Return the most likely state vector, optionally grouping by masked elements.
@@ -228,6 +229,10 @@ class GenerativeDenseChain:
         When a mask is provided, states are grouped by their values at the unmasked
         (mask=1) positions. The group with highest total probability is selected,
         and masked-out (mask=0) positions are set to np.nan.
+        
+        When a conditional is provided, states are first filtered to only those
+        that match the non-NaN values in the conditional array. If no states match,
+        the conditional is ignored.
         
         Parameters
         ----------
@@ -237,26 +242,49 @@ class GenerativeDenseChain:
             k-element binary mask. 1 = consider this element for grouping and output,
             0 = ignore for grouping, output as np.nan.
             If None, returns the full most likely state vector.
+        conditional : np.ndarray, optional
+            k-element array with np.nan for "don't care" positions and specific
+            values for positions that must match. States are filtered to only
+            those matching the non-NaN values. If no states match, ignored.
             
         Returns
         -------
         np.ndarray
             Most likely state vector (length k). Masked-out elements are np.nan.
         """
+        # Apply conditional filtering if provided
+        states = self.states
+        dist = state_dist
+        
+        if conditional is not None:
+            conditional = np.asarray(conditional, dtype=float)
+            # Find which positions have non-NaN values (constraints)
+            constraint_mask = ~np.isnan(conditional)
+            
+            if constraint_mask.any():
+                # Find states that match the conditional values at constrained positions
+                matches = (states[:, constraint_mask] == conditional[constraint_mask]).all(axis=1)
+                
+                # Only apply filtering if at least one state matches
+                if matches.any():
+                    matching_indices = np.where(matches)[0]
+                    states = states[matching_indices]
+                    dist = state_dist[matching_indices]
+        
         if mask is None:
             # No grouping, return most likely state
-            best_idx = np.argmax(state_dist)
-            return self.states[best_idx].astype(float).copy()
+            best_idx = np.argmax(dist)
+            return states[best_idx].astype(float).copy()
         
         mask = np.asarray(mask, dtype=bool)
         
         # Group states by their values at unmasked (mask=1) positions
         groups = {}
-        for idx, state in enumerate(self.states):
+        for idx, state in enumerate(states):
             key = tuple(state[mask])
             if key not in groups:
                 groups[key] = 0.0
-            groups[key] += state_dist[idx]
+            groups[key] += dist[idx]
         
         # Find group with highest total probability
         best_key = max(groups.keys(), key=lambda k: groups[k])

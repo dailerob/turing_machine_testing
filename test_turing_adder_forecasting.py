@@ -179,7 +179,7 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, symbol_encodin
     # Store results
     results_full = []
     
-    for n_train in range(1, n_train_total + 1):
+    for n_train in range(0, n_train_total, 10):
         # Create GDC with first n_train tapes
         training_subset = train_tapes[:n_train]
         
@@ -199,14 +199,13 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, symbol_encodin
         })
         
         # Print progress every 10 tapes and at key points
-        if n_train <= 5 or n_train % 10 == 0 or n_train == n_train_total:
-            overall_acc = accuracy_per_pos.mean()
-            print(f"\nAfter {n_train} training tape(s):")
-            print(f"  GDC n_states: {gdc.n_states}")
-            for pos, name in enumerate(position_names_full):
-                print(f"  {name}: {accuracy_per_pos[pos]:.3f} "
-                      f"({int(total_per_pos[pos])} predictions)")
-            print(f"  Overall (mean): {overall_acc:.3f}")
+        overall_acc = accuracy_per_pos.mean()
+        print(f"\nAfter {n_train} training tape(s):")
+        print(f"  GDC n_states: {gdc.n_states}")
+        for pos, name in enumerate(position_names_full):
+            print(f"  {name}: {accuracy_per_pos[pos]:.3f} "
+                  f"({int(total_per_pos[pos])} predictions)")
+        print(f"  Overall (mean): {overall_acc:.3f}")
     
     # =========================================================================
     # TEST 2: Reduced 3-column GDC (read, write, direction only)
@@ -220,7 +219,7 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, symbol_encodin
     # Store results
     results_reduced = []
     
-    for n_train in range(1, n_train_total + 1):
+    for n_train in range(0, n_train_total, 10):
         # Create GDC with first n_train tapes, using only columns 1, 2, 3
         training_subset = [tape[:, 1:4] for tape in train_tapes[:n_train]]
         
@@ -240,14 +239,13 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, symbol_encodin
         })
         
         # Print progress every 10 tapes and at key points
-        if n_train <= 5 or n_train % 10 == 0 or n_train == n_train_total:
-            overall_acc = accuracy_per_pos.mean()
-            print(f"\nAfter {n_train} training tape(s):")
-            print(f"  GDC n_states: {gdc.n_states}")
-            for pos, name in enumerate(position_names_reduced):
-                print(f"  {name}: {accuracy_per_pos[pos]:.3f} "
-                      f"({int(total_per_pos[pos])} predictions)")
-            print(f"  Overall (mean): {overall_acc:.3f}")
+        overall_acc = accuracy_per_pos.mean()
+        print(f"\nAfter {n_train} training tape(s):")
+        print(f"  GDC n_states: {gdc.n_states}")
+        for pos, name in enumerate(position_names_reduced):
+            print(f"  {name}: {accuracy_per_pos[pos]:.3f} "
+                  f"({int(total_per_pos[pos])} predictions)")
+        print(f"  Overall (mean): {overall_acc:.3f}")
     
     # =========================================================================
     # FINAL SUMMARY
@@ -292,7 +290,7 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, symbol_encodin
 # =============================================================================
 # Configuration - adjust these parameters as needed
 # =============================================================================
-N_TRAIN = 160              # Number of training addition problems
+N_TRAIN = 240              # Number of training addition problems
 N_TEST = 10               # Number of test addition problems
 NUM_RANGE_TRAIN = (0, 16) # Range of random numbers for training (5-bit)
 NUM_RANGE_TEST = (0, 31)  # Range of random numbers for testing (5-bit)

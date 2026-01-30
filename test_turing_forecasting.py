@@ -49,6 +49,9 @@ def evaluate_gdc_forecasting(gdc, test_tapes, test_halted):
     for tape, halted in zip(test_tapes, test_halted):
         if len(tape) < 2:
             continue
+        
+        # Single forward pass to get state distribution at every timestep (O(T) instead of O(T²))
+        _, state_history = gdc.forward_pass(tape, return_history=True)
             
         # For each step (except the last), predict the next step
         for t in range(len(tape) - 1):
@@ -56,9 +59,8 @@ def evaluate_gdc_forecasting(gdc, test_tapes, test_halted):
             if tape[t, 0] == -1 or tape[t + 1, 0] == -1:
                 continue
             
-            # Forward pass on observations up to and including step t
-            observations = tape[:t + 1]
-            state_dist = gdc.forward_pass(observations)
+            # Use precomputed state distribution at step t
+            state_dist = state_history[t]
             
             # Forecast 1 step ahead
             forecast_dist = gdc.forecast(state_dist, n_steps=1)
@@ -120,6 +122,9 @@ def evaluate_gdc_forecasting_reduced(gdc, test_tapes, test_halted):
         
         # Extract reduced columns (read, write, direction = columns 1, 2, 3)
         tape_reduced = tape[:, 1:4]
+        
+        # Single forward pass to get state distribution at every timestep (O(T) instead of O(T²))
+        _, state_history = gdc.forward_pass(tape_reduced, return_history=True)
             
         # For each step (except the last), predict the next step
         for t in range(len(tape) - 1):
@@ -127,9 +132,8 @@ def evaluate_gdc_forecasting_reduced(gdc, test_tapes, test_halted):
             if tape[t, 0] == -1 or tape[t + 1, 0] == -1:
                 continue
             
-            # Forward pass on observations up to and including step t
-            observations = tape_reduced[:t + 1]
-            state_dist = gdc.forward_pass(observations)
+            # Use precomputed state distribution at step t
+            state_dist = state_history[t]
             
             # Forecast 1 step ahead
             forecast_dist = gdc.forecast(state_dist, n_steps=1)

@@ -3,12 +3,28 @@ Generative Dense Chain (GDC) - A training-free Hidden Markov Model variant.
 
 The model assumes:
 - Emission: P(obs|state) = 1 if obs == state exactly, 0 otherwise
-- Transition: Sequential bias (alpha) to next state, uniform otherwise
-- Initial distribution: Uniform
+- Transition: Configurable (see transition_type parameter)
+- Initial distribution: Uniform (over all states or sequence starts)
+
+Transition Types:
+-----------------
+1. 'sequential' (default):
+   - P(next state | non-terminal) = alpha
+   - P(other states | non-terminal) = (1-alpha)/(n-1) each
+   - P(any state | terminal) = 1/n (uniform)
+
+2. 'self_loop':
+   - P(same state | any state) = theta (self-loop)
+   - P(next state | non-terminal) = alpha
+   - P(other states | non-terminal) = (1-alpha-theta)/(n-2) each
+   - P(other states | terminal) = (1-theta)/(n-1) each
 """
 
 import numpy as np
-from typing import Union, List, Tuple, Optional
+from typing import Union, List, Tuple, Optional, Literal
+
+# Type alias for transition types
+TransitionType = Literal['sequential', 'self_loop']
 
 
 class GenerativeDenseChain:
@@ -17,7 +33,14 @@ class GenerativeDenseChain:
     an input sequence, with assumed transition and emission distributions.
     """
     
-    def __init__(self, sequences: Union[np.ndarray, List[np.ndarray]], alpha: float = 0.9):
+    def __init__(
+        self,
+        sequences: Union[np.ndarray, List[np.ndarray]],
+        alpha: float = 0.8,
+        theta: float = 0.1,
+        transition_type: TransitionType = 'sequential',
+        initial_dist: str = 'uniform'
+    ):
         """
         Initialize a Generative Dense Chain.
         
@@ -27,57 +50,134 @@ class GenerativeDenseChain:
             Either a single n*k array or a list of arrays. Each row becomes a hidden state.
             If a list is provided, arrays are concatenated and terminal states (last state
             of each array) diffuse uniformly rather than with sequential bias.
-        alpha : float
-            Default transition probability to next sequential state. The remaining
-            probability (1-alpha) is distributed uniformly among other states.
+        alpha : float, default 0.8
+            Transition probability to next sequential state.
+        theta : float, default 0.1
+            Self-loop probability (only used when transition_type='self_loop').
+            Must satisfy alpha + theta <= 1.
+        transition_type : str, default 'sequential'
+            Type of transition structure:
+            - 'sequential': alpha to next, (1-alpha) diffuses uniformly
+            - 'self_loop': theta to self, alpha to next, rest diffuses uniformly
+        initial_dist : str, default 'uniform'
+            Initial distribution type:
+            - 'uniform': Uniform over all states.
+            - 'sequence_starts': Uniform over the first state of each sequence.
         """
+        if initial_dist not in ('uniform', 'sequence_starts'):
+            raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
+        
+        if transition_type not in ('sequential', 'self_loop'):
+            raise ValueError(f"transition_type must be 'sequential' or 'self_loop', got '{transition_type}'")
+        
+        if transition_type == 'self_loop' and alpha + theta > 1:
+            raise ValueError(f"alpha + theta must be <= 1, got {alpha} + {theta} = {alpha + theta}")
+        
         if isinstance(sequences, np.ndarray):
             self.states = sequences.copy()
             self.terminal_mask = np.zeros(len(sequences), dtype=bool)
             self.terminal_mask[-1] = True
+            self.start_mask = np.zeros(len(sequences), dtype=bool)
+            self.start_mask[0] = True
         else:
-            # List of arrays - concatenate and track terminal states
+            # List of arrays - concatenate and track terminal/start states
             self.states = np.vstack(sequences)
             self.terminal_mask = np.zeros(len(self.states), dtype=bool)
+            self.start_mask = np.zeros(len(self.states), dtype=bool)
             cumsum = 0
             for seq in sequences:
+                self.start_mask[cumsum] = True
                 cumsum += len(seq)
                 self.terminal_mask[cumsum - 1] = True
         
         self.n_states = len(self.states)
         self.k = self.states.shape[1]
         self.alpha = alpha
+        self.theta = theta
+        self.transition_type = transition_type
+        self.initial_dist = initial_dist
+        
+        # Build state index for O(1) emission lookups
+        self._state_to_indices: dict[tuple, list[int]] = {}
+        for i, row in enumerate(self.states):
+            key = tuple(row)
+            if key not in self._state_to_indices:
+                self._state_to_indices[key] = []
+            self._state_to_indices[key].append(i)
     
-    def _transition(self, dist: np.ndarray, alpha: Optional[float] = None) -> np.ndarray:
+    def _transition(
+        self,
+        dist: np.ndarray,
+        alpha: Optional[float] = None,
+        theta: Optional[float] = None,
+        transition_type: Optional[TransitionType] = None
+    ) -> np.ndarray:
         """
         Apply transition to a state distribution.
         
-        The transition matrix has:
-        - P(next state | current non-terminal state) = alpha
-        - P(other states | current non-terminal state) = (1-alpha)/(n-1) each
-        - P(any state | current terminal state) = 1/n (uniform diffusion)
+        Dispatches to the appropriate transition implementation based on
+        transition_type. Override parameters take precedence over instance defaults.
         
         Parameters
         ----------
         dist : np.ndarray
             Current state distribution (length n_states).
         alpha : float, optional
-            Transition probability to next state. Uses default if not specified.
+            Transition probability to next state. Uses instance default if not specified.
+        theta : float, optional
+            Self-loop probability. Uses instance default if not specified.
+        transition_type : str, optional
+            Transition structure type. Uses instance default if not specified.
             
         Returns
         -------
         np.ndarray
             New state distribution after transition.
         """
+        # Use instance defaults for unspecified parameters
         if alpha is None:
             alpha = self.alpha
+        if theta is None:
+            theta = self.theta
+        if transition_type is None:
+            transition_type = self.transition_type
         
         n = self.n_states
         
-        # Handle edge case of single state
+        # Handle edge case of single state (applies to all transition types)
         if n == 1:
             return dist.copy()
         
+        # Dispatch to appropriate transition implementation
+        if transition_type == 'sequential':
+            return self._transition_sequential(dist, alpha)
+        elif transition_type == 'self_loop':
+            return self._transition_self_loop(dist, alpha, theta)
+        else:
+            raise ValueError(f"Unknown transition type: {transition_type}")
+    
+    def _transition_sequential(self, dist: np.ndarray, alpha: float) -> np.ndarray:
+        """
+        Sequential transition: alpha to next state, (1-alpha) diffuses uniformly.
+        
+        Transition matrix structure:
+        - P(next state | non-terminal) = alpha
+        - P(other states | non-terminal) = (1-alpha)/(n-1) each
+        - P(any state | terminal) = 1/n (uniform diffusion)
+        
+        Parameters
+        ----------
+        dist : np.ndarray
+            Current state distribution (length n_states).
+        alpha : float
+            Transition probability to next sequential state.
+            
+        Returns
+        -------
+        np.ndarray
+            New state distribution after transition.
+        """
+        n = self.n_states
         beta = (1 - alpha) / (n - 1)
         
         # Separate terminal and non-terminal contributions
@@ -93,6 +193,87 @@ class GenerativeDenseChain:
         # - beta * non_terminal_sum: base uniform contribution from non-terminal states
         # - terminal_prob / n: uniform contribution from terminal states
         new_dist = rolled * (alpha - beta) + beta * non_terminal_sum + terminal_prob / n
+        
+        return new_dist
+    
+    def _transition_self_loop(self, dist: np.ndarray, alpha: float, theta: float) -> np.ndarray:
+        """
+        Self-loop transition: theta to self, alpha to next, rest diffuses uniformly.
+        
+        Transition matrix structure:
+        - P(same state | any state) = theta (self-loop)
+        - P(next state | non-terminal) = alpha
+        - P(other states | non-terminal) = (1-alpha-theta)/(n-2) each
+        - P(other states | terminal) = (1-theta)/(n-1) each
+        
+        Mathematical derivation for efficient computation:
+        -------------------------------------------------
+        Let gamma = 1 - alpha - theta (diffusion probability)
+        Let beta_nt = gamma / (n-2) (per-state diffusion from non-terminal)
+        Let beta_t = (1-theta) / (n-1) (per-state diffusion from terminal)
+        
+        For state i, the incoming probability is:
+          new_dist[i] = theta * dist[i]                    # self-loop
+                      + alpha * rolled_nt[i]               # sequential from predecessor
+                      + beta_nt * (NT_sum - dist[i]*(i is NT) - rolled_nt[i])
+                      + beta_t * (T_sum - dist[i]*(i is T))
+        
+        This can be vectorized as:
+          new_dist = theta * dist
+                   + alpha * rolled_nt
+                   + beta_nt * NT_sum - beta_nt * NT_dist - beta_nt * rolled_nt
+                   + beta_t * T_sum - beta_t * T_dist
+        
+        Parameters
+        ----------
+        dist : np.ndarray
+            Current state distribution (length n_states).
+        alpha : float
+            Transition probability to next sequential state.
+        theta : float
+            Self-loop probability (staying in same state).
+            
+        Returns
+        -------
+        np.ndarray
+            New state distribution after transition.
+        """
+        n = self.n_states
+        
+        # Edge case: n=2 means no "other" states for non-terminal diffusion
+        # Both terminal and non-terminal simplify to: theta to self, (1-theta) to other
+        if n == 2:
+            return theta * dist + (1 - theta) * np.roll(dist, 1)
+        
+        # General case: n >= 3
+        gamma = 1 - alpha - theta
+        beta_nt = gamma / (n - 2)  # diffusion per state from non-terminal
+        beta_t = (1 - theta) / (n - 1)  # diffusion per state from terminal
+        
+        # Separate terminal and non-terminal distributions
+        non_terminal_dist = dist * (~self.terminal_mask).astype(float)
+        terminal_dist = dist * self.terminal_mask.astype(float)
+        non_terminal_sum = non_terminal_dist.sum()
+        terminal_sum = terminal_dist.sum()
+        
+        # Roll non-terminal distribution for sequential transition
+        rolled_nt = np.roll(non_terminal_dist, 1)
+        
+        # 1. Self-loop: everyone contributes theta to themselves
+        self_loop = theta * dist
+        
+        # 2. Sequential: non-terminal states contribute alpha to successor
+        sequential = alpha * rolled_nt
+        
+        # 3. NT diffusion: each state gets beta_nt from all NT states except self and predecessor
+        #    = beta_nt * NT_sum - beta_nt * (self if NT) - beta_nt * (predecessor if NT)
+        nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * rolled_nt
+        
+        # 4. T diffusion: each state gets beta_t from all T states except self
+        #    = beta_t * T_sum - beta_t * (self if T)
+        t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
+        
+        new_dist = self_loop + sequential + nt_diffusion + t_diffusion
         
         return new_dist
     
@@ -112,10 +293,40 @@ class GenerativeDenseChain:
         """
         return (self.states == observation).all(axis=1).astype(float)
     
+    def _get_initial_distribution(self, initial_dist: Optional[str] = None) -> np.ndarray:
+        """
+        Get the initial state distribution.
+        
+        Parameters
+        ----------
+        initial_dist : str, optional
+            Initial distribution type. Uses instance default if not specified.
+            - 'uniform': Uniform over all states.
+            - 'sequence_starts': Uniform over the first state of each sequence.
+            
+        Returns
+        -------
+        np.ndarray
+            Initial state distribution (length n_states).
+        """
+        if initial_dist is None:
+            initial_dist = self.initial_dist
+        
+        if initial_dist == 'uniform':
+            return np.ones(self.n_states) / self.n_states
+        elif initial_dist == 'sequence_starts':
+            dist = self.start_mask.astype(float)
+            return dist / dist.sum()
+        else:
+            raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
+    
     def forward_pass(
         self,
         observations: np.ndarray,
         alpha: Optional[float] = None,
+        theta: Optional[float] = None,
+        transition_type: Optional[TransitionType] = None,
+        initial_dist: Optional[str] = None,
         return_history: bool = False
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """
@@ -126,7 +337,15 @@ class GenerativeDenseChain:
         observations : np.ndarray
             T*k array of observations, where T is the number of timesteps.
         alpha : float, optional
-            Transition probability. Uses default if not specified.
+            Transition probability to next state. Uses instance default if not specified.
+        theta : float, optional
+            Self-loop probability. Uses instance default if not specified.
+        transition_type : str, optional
+            Transition structure type. Uses instance default if not specified.
+        initial_dist : str, optional
+            Initial distribution type. Uses instance default if not specified.
+            - 'uniform': Uniform over all states.
+            - 'sequence_starts': Uniform over the first state of each sequence.
         return_history : bool, default False
             If True, also return the state distribution at each timestep.
             
@@ -138,37 +357,45 @@ class GenerativeDenseChain:
             T*n_states array of state distributions at each timestep.
             Only returned if return_history=True.
         """
-        if alpha is None:
-            alpha = self.alpha
+        n = self.n_states
         
-        # Start with uniform distribution
-        dist = np.ones(self.n_states) / self.n_states
+        # Get initial distribution
+        dist = self._get_initial_distribution(initial_dist)
         
+        # Pre-allocate history array if needed
         if return_history:
-            history = []
+            history = np.empty((len(observations), n))
         
         for t, obs in enumerate(observations):
             # Apply transition (skip for first observation)
             if t > 0:
-                dist = self._transition(dist, alpha)
+                dist = self._transition(dist, alpha, theta, transition_type)
             
-            # Apply emission likelihood
-            likelihood = self._emission_likelihood(obs)
-            dist = dist * likelihood
+            # Apply emission likelihood and normalize in one step
+            matching_indices = self._state_to_indices.get(tuple(obs), [])
             
-            # Normalize, or return to uniform if no states match
-            total = dist.sum()
-            if total > 0:
-                dist = dist / total
+            if matching_indices:
+                # Extract probabilities only at matching indices
+                matched_probs = dist[matching_indices]
+                total = matched_probs.sum()
+                
+                if total > 0:
+                    # Zero out and set only matching states
+                    new_dist = np.zeros(n)
+                    new_dist[matching_indices] = matched_probs / total
+                    dist = new_dist
+                else:
+                    # Matching states have zero probability - return to uniform
+                    dist = np.ones(n) / n
             else:
                 # No state matches observation - return to uniform
-                dist = np.ones(self.n_states) / self.n_states
+                dist = np.ones(n) / n
             
             if return_history:
-                history.append(dist.copy())
+                history[t] = dist
         
         if return_history:
-            return dist, np.array(history)
+            return dist, history
         return dist
     
     def forecast(
@@ -176,6 +403,8 @@ class GenerativeDenseChain:
         state_dist: np.ndarray,
         n_steps: int,
         alpha: Optional[float] = None,
+        theta: Optional[float] = None,
+        transition_type: Optional[TransitionType] = None,
         return_history: bool = False
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """
@@ -188,7 +417,11 @@ class GenerativeDenseChain:
         n_steps : int
             Number of steps to project forward.
         alpha : float, optional
-            Transition probability. Uses default if not specified.
+            Transition probability to next state. Uses instance default if not specified.
+        theta : float, optional
+            Self-loop probability. Uses instance default if not specified.
+        transition_type : str, optional
+            Transition structure type. Uses instance default if not specified.
         return_history : bool, default False
             If True, return distribution at each projected step.
             
@@ -200,16 +433,13 @@ class GenerativeDenseChain:
             n_steps*n_states array of state distributions at each step.
             Only returned if return_history=True.
         """
-        if alpha is None:
-            alpha = self.alpha
-        
         dist = state_dist.copy()
         
         if return_history:
             history = []
         
         for _ in range(n_steps):
-            dist = self._transition(dist, alpha)
+            dist = self._transition(dist, alpha, theta, transition_type)
             if return_history:
                 history.append(dist.copy())
         
@@ -384,7 +614,8 @@ if __name__ == "__main__":
     
     gdc = GenerativeDenseChain(sequence, alpha=0.8)
     print(f"States:\n{gdc.states}\n")
-    print(f"Terminal mask: {gdc.terminal_mask}\n")
+    print(f"Terminal mask: {gdc.terminal_mask}")
+    print(f"Transition type: {gdc.transition_type}\n")
     
     # Forward pass with observations
     observations = np.array([
@@ -426,4 +657,66 @@ if __name__ == "__main__":
     gdc_multi = GenerativeDenseChain([seq1, seq2], alpha=0.8)
     print(f"States:\n{gdc_multi.states}\n")
     print(f"Terminal mask: {gdc_multi.terminal_mask}")
-    print("(Terminal states diffuse uniformly instead of with sequential bias)")
+    print(f"Start mask: {gdc_multi.start_mask}")
+    print("(Terminal states diffuse uniformly instead of with sequential bias)\n")
+    
+    # Demo with sequence_starts initial distribution
+    print("=== Sequence Starts Initial Distribution Demo ===\n")
+    
+    gdc_starts = GenerativeDenseChain([seq1, seq2], alpha=0.8, initial_dist='sequence_starts')
+    print(f"Initial distribution (uniform): {gdc_multi._get_initial_distribution()}")
+    print(f"Initial distribution (sequence_starts): {gdc_starts._get_initial_distribution()}")
+    
+    # Forward pass comparison
+    obs = np.array([[0, 0]])
+    dist_uniform, _ = gdc_multi.forward_pass(obs, return_history=True)
+    dist_starts, _ = gdc_starts.forward_pass(obs, return_history=True)
+    print(f"\nAfter observing [0, 0]:")
+    print(f"  With uniform init: {dist_uniform}")
+    print(f"  With sequence_starts init: {dist_starts}")
+    
+    # Demo with self-loop transition type
+    print("\n=== Self-Loop Transition Demo ===\n")
+    
+    gdc_self_loop = GenerativeDenseChain(
+        sequence, 
+        alpha=0.8, 
+        theta=0.1, 
+        transition_type='self_loop'
+    )
+    print(f"Transition type: {gdc_self_loop.transition_type}")
+    print(f"Alpha (sequential): {gdc_self_loop.alpha}")
+    print(f"Theta (self-loop): {gdc_self_loop.theta}")
+    print(f"Remaining (diffusion): {1 - gdc_self_loop.alpha - gdc_self_loop.theta}\n")
+    
+    # Compare transition behavior
+    print("Comparing transitions from state 0 (dist=[1,0,0,0]):")
+    initial = np.array([1.0, 0.0, 0.0, 0.0])
+    
+    # Sequential transition
+    seq_trans = gdc._transition(initial)
+    print(f"  Sequential (alpha=0.8): {seq_trans}")
+    
+    # Self-loop transition  
+    sl_trans = gdc_self_loop._transition(initial)
+    print(f"  Self-loop (alpha=0.8, theta=0.1): {sl_trans}")
+    
+    # Verify probabilities
+    print(f"\n  Sequential sum: {seq_trans.sum():.6f}")
+    print(f"  Self-loop sum: {sl_trans.sum():.6f}")
+    
+    # Forecast comparison
+    print("\nForecasting 3 steps from uniform distribution:")
+    uniform = np.ones(4) / 4
+    
+    seq_forecast, seq_hist = gdc.forecast(uniform, n_steps=3, return_history=True)
+    sl_forecast, sl_hist = gdc_self_loop.forecast(uniform, n_steps=3, return_history=True)
+    
+    print(f"  Sequential final: {seq_forecast}")
+    print(f"  Self-loop final: {sl_forecast}")
+    
+    # Runtime override of transition type
+    print("\n=== Runtime Override Demo ===\n")
+    print("Using sequential model but overriding to self_loop at runtime:")
+    override_trans = gdc._transition(initial, transition_type='self_loop', theta=0.15)
+    print(f"  Override result: {override_trans}")

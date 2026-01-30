@@ -82,15 +82,17 @@ def run_turing_machine(program, halt_state='H', initial_state='A', max_steps=Non
         
         write_symbol, direction, next_state = transitions[(state, read_symbol)]
         
-        # Record the 5-tuple that was executed
+        # Record the 5-tuple that was executed (write_symbol may be None for no-write)
         history.append((state, read_symbol, write_symbol, direction, next_state))
         
         if verbose:
+            write_display = repr(write_symbol) if write_symbol is not None else "(no write)"
             print(f"Step {steps + 1}: State={state}, Read={repr(read_symbol)} -> "
-                  f"Write={repr(write_symbol)}, Move={direction}, Next={next_state}")
+                  f"Write={write_display}, Move={direction}, Next={next_state}")
         
-        # Execute transition
-        tape[head] = write_symbol
+        # Execute transition (if write_symbol is None, keep the current value)
+        if write_symbol is not None:
+            tape[head] = write_symbol
         head += 1 if direction == 'R' else -1
         state = next_state
         steps += 1
@@ -283,21 +285,24 @@ def _parse_transition_value(state_name, read_symbol, value):
     Parse a transition value into (write, direction, next_state).
     
     Handles various formats:
-        'R' -> (read_symbol, 'R', state_name)  # Move right, no write, same state
-        'L' -> (read_symbol, 'L', state_name)  # Move left, no write, same state
-        {L: next_state} -> (read_symbol, 'L', next_state)
-        {R: next_state} -> (read_symbol, 'R', next_state)
+        'R' -> (None, 'R', state_name)  # Move right, no write, same state
+        'L' -> (None, 'L', state_name)  # Move left, no write, same state
+        {L: next_state} -> (None, 'L', next_state)
+        {R: next_state} -> (None, 'R', next_state)
         {write: x, L: next_state} -> (x, 'L', next_state)
         {write: x, R: next_state} -> (x, 'R', next_state)
         {write: x, L} -> (x, 'L', state_name)  # write and move, same state
+    
+    Note: When no explicit write is specified, write_symbol is None.
+          This indicates the tape cell should remain unchanged.
     """
     # Simple direction only: 'R' or 'L'
     if value in ('R', 'L'):
-        return (read_symbol, value, state_name)
+        return (None, value, state_name)
     
     if isinstance(value, dict):
-        write_symbol = value.get('write', read_symbol)
-        write_symbol = str(write_symbol) if write_symbol is not None else read_symbol
+        write_symbol = value.get('write', None)
+        write_symbol = str(write_symbol) if write_symbol is not None else None
         
         # Find direction and next_state
         direction = None
@@ -416,6 +421,7 @@ def history_to_numpy(history, state_encoding=None, symbol_encoding=None, include
         - States are encoded as integers (e.g., A=0, B=1, C=2, ...)
         - Symbols are encoded as integers (auto-detected from history)
         - Direction: L=0, R=1
+        - Write column: -1 indicates no write (tape unchanged)
         - Halt row uses -1 for current_state, read, write, direction
     """
     if not history:
@@ -434,7 +440,8 @@ def history_to_numpy(history, state_encoding=None, symbol_encoding=None, include
         all_symbols = set()
         for _, read, write, _, _ in history:
             all_symbols.add(read)
-            all_symbols.add(write)
+            if write is not None:  # None means no write, don't add to encoding
+                all_symbols.add(write)
         # Sort symbols for consistent encoding
         symbol_encoding = {sym: i for i, sym in enumerate(sorted(all_symbols, key=str))}
     
@@ -449,7 +456,7 @@ def history_to_numpy(history, state_encoding=None, symbol_encoding=None, include
     for i, (curr_state, read, write, direction, next_state) in enumerate(history):
         arr[i, 0] = state_encoding[curr_state]
         arr[i, 1] = symbol_encoding[read]
-        arr[i, 2] = symbol_encoding[write]
+        arr[i, 2] = symbol_encoding[write] if write is not None else -1  # -1 for no write
         arr[i, 3] = dir_encoding[direction]
         arr[i, 4] = state_encoding[next_state]
     
@@ -646,7 +653,7 @@ def simulate_random_adders(n_runs, num_range=(0, 255), max_steps=10000,
         for _, read, write, _, _ in history:
             if read not in symbol_encoding:
                 symbol_encoding[read] = len(symbol_encoding)
-            if write not in symbol_encoding:
+            if write is not None and write not in symbol_encoding:
                 symbol_encoding[write] = len(symbol_encoding)
         
         arr, _, _ = history_to_numpy(

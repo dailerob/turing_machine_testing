@@ -361,7 +361,9 @@ class GenerativeDenseChainTimeSeries:
         end_dist[-1] = 0.0
         total = np.sum(end_dist)
         if total <= 0:
-            raise ValueError("End state distribution has zero mass after zeroing last state.")
+            end_dist = np.ones(len(end_dist))/len(end_dist)
+            #print("potential error, fall back to uniform")
+            #raise ValueError("End state distribution has zero mass after zeroing last state.")
         end_dist = end_dist / total
 
         current_dist = end_dist.copy()

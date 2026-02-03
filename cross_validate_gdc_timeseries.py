@@ -234,7 +234,11 @@ def cross_validate_fold(
     context_length: int,
     horizon: int,
 ) -> float:
-    """Evaluate a single CV fold. Returns MAE or np.inf on error."""
+    """Evaluate a single CV fold. Returns MAE or np.inf on error.
+    
+    The model is built with train_data[:-context] to avoid data leakage.
+    The context (train_data[-context:]) is used to start off prediction into val_data.
+    """
     try:
         train_data = np.asarray(train_data, dtype=float).ravel()
         val_data = np.asarray(val_data, dtype=float).ravel()
@@ -245,8 +249,14 @@ def cross_validate_fold(
             train_diff = train_data
 
         n_train = len(train_diff)
-        states = train_diff.reshape(-1, 1)
-        actual_context = min(context_length, n_train)
+        actual_context = min(context_length, n_train - 1)  # Ensure at least 1 sample for model
+        
+        # Split: model built with data excluding context, context used for forecasting
+        model_data = train_diff[:-actual_context] if actual_context > 0 else train_diff
+        if len(model_data) < 1:
+            return np.inf
+        
+        states = model_data.reshape(-1, 1)
         obs_seq = train_diff[-actual_context:].reshape(-1, 1)
 
         actual_horizon = min(horizon, len(val_data))
@@ -287,7 +297,7 @@ def time_series_cross_validation(
     if val_size is None:
         available = n // 2
         val_size = max(horizon, available // n_folds)
-    min_train = max(50, n // 4)
+    min_train = max(10, n // 4)
     fold_maes = []
 
     for fold in range(n_folds):
@@ -385,7 +395,11 @@ def evaluate_single(
     context_length: int,
     horizon: int,
 ) -> dict:
-    """Evaluate GDC-TS with given parameters. Returns metrics dict with forecasts, CI, MAE, RMSE, MASE, etc."""
+    """Evaluate GDC-TS with given parameters. Returns metrics dict with forecasts, CI, MAE, RMSE, MASE, etc.
+    
+    The model is built with train_data[:-context] to avoid data leakage.
+    The context (train_data[-context:]) is used to start off prediction into test_data.
+    """
     train_data = np.asarray(train_data, dtype=float).ravel()
     test_data = np.asarray(test_data, dtype=float).ravel()
 
@@ -395,8 +409,13 @@ def evaluate_single(
         train_diff = train_data
 
     n_train = len(train_diff)
-    states = train_diff.reshape(-1, 1)
-    actual_context = min(context_length, n_train)
+    actual_context = min(context_length, n_train - 1)  # Ensure at least 1 sample for model
+    
+    # Split: model built with data excluding context, context used for forecasting
+    model_data = train_diff[:-actual_context] if actual_context > 0 else train_diff
+    n_model = len(model_data)
+    
+    states = model_data.reshape(-1, 1)
     obs_seq = train_diff[-actual_context:].reshape(-1, 1)
 
     model = GenerativeDenseChainTimeSeries(
@@ -435,7 +454,7 @@ def evaluate_single(
     else:
         context_plot = obs_seq.ravel()
 
-    print(f"  MAE: {mae:.4f}, RMSE: {rmse:.4f}, MASE: {mase:.4f}, CI Coverage: {coverage:.1f}%, Context: {actual_context}")
+    print(f"  MAE: {mae:.4f}, RMSE: {rmse:.4f}, MASE: {mase:.4f}, CI Coverage: {coverage:.1f}%, Context: {actual_context}, Model states: {n_model}")
 
     return {
         "mae": mae,

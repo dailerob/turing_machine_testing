@@ -144,7 +144,7 @@ class GenerativeDenseChainTimeSeries:
         factor = (1 - alpha) / n
         S = np.sum(dist)
         new_dist = np.empty_like(dist)
-        new_dist[0] = factor * S
+        new_dist[0] = 0#factor * S
         new_dist[1:n] = factor * S + (alpha - factor) * dist[: n - 1]
         return new_dist
 
@@ -166,7 +166,7 @@ class GenerativeDenseChainTimeSeries:
         self_loop = theta * dist
         sequential = alpha * shifted
         wrap_to_zero = np.zeros(n)
-        wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
+        #wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
         nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * shifted
         nt_diffusion[0] -= beta_nt * non_terminal_dist[last_nt_idx]
         t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist

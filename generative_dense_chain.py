@@ -189,7 +189,7 @@ class GenerativeDenseChain:
         shifted[1:n] = non_terminal_dist[: n - 1]
         last_nt_idx = np.where(~self.terminal_mask)[0][-1]
         wrap_to_zero = np.zeros(n)
-        wrap_to_zero[0] = (alpha - beta) * non_terminal_dist[last_nt_idx]
+        #wrap_to_zero[0] = (alpha - beta) * non_terminal_dist[last_nt_idx]
 
         new_dist = (alpha - beta) * shifted + beta * non_terminal_sum + terminal_prob / n + wrap_to_zero
         return new_dist
@@ -219,7 +219,7 @@ class GenerativeDenseChain:
         self_loop = theta * dist
         sequential = alpha * shifted
         wrap_to_zero = np.zeros(n)
-        wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
+        #wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
         nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * shifted
         nt_diffusion[0] -= beta_nt * non_terminal_dist[last_nt_idx]
         t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist

@@ -6,25 +6,27 @@ The model assumes:
 - Transition: Configurable (see transition_type parameter)
 - Initial distribution: Uniform (over all states or sequence starts)
 
-Transition Types:
+Transition Types (all no-wrap: state 0 gets no inflow from the chain; wrap mass goes to state 0):
 -----------------
 1. 'sequential' (default):
-   - P(next state | non-terminal) = alpha
-   - P(other states | non-terminal) = (1-alpha)/(n-1) each
-   - P(any state | terminal) = 1/n (uniform)
+   - P(next state | non-terminal) = alpha, (1-alpha)/(n-1) diffuse; no wrap.
+   - P(any state | terminal) = 1/n (uniform).
 
 2. 'self_loop':
    - P(same state | any state) = theta (self-loop)
-   - P(next state | non-terminal) = alpha
-   - P(other states | non-terminal) = (1-alpha-theta)/(n-2) each
-   - P(other states | terminal) = (1-theta)/(n-1) each
+   - P(next state | non-terminal) = alpha, rest diffuse; no wrap.
+   - P(other states | terminal) = (1-theta)/(n-1) each.
+
+3. 'self_loop_two_step':
+   - Self-loop (theta), next (alpha), two ahead (gamma), rest diffuse; no wrap.
+   - At pre-terminal/terminal, transitions diffuse as in (1) and (2).
 """
 
 import numpy as np
 from typing import Union, List, Tuple, Optional, Literal
 
 # Type alias for transition types
-TransitionType = Literal['sequential', 'self_loop']
+TransitionType = Literal['sequential', 'self_loop', 'self_loop_two_step']
 
 
 class GenerativeDenseChain:
@@ -38,6 +40,7 @@ class GenerativeDenseChain:
         sequences: Union[np.ndarray, List[np.ndarray]],
         alpha: float = 0.8,
         theta: float = 0.1,
+        gamma: float = 0.0,
         transition_type: TransitionType = 'sequential',
         initial_dist: str = 'uniform'
     ):
@@ -53,12 +56,16 @@ class GenerativeDenseChain:
         alpha : float, default 0.8
             Transition probability to next sequential state.
         theta : float, default 0.1
-            Self-loop probability (only used when transition_type='self_loop').
-            Must satisfy alpha + theta <= 1.
+            Self-loop probability (used when transition_type='self_loop' or 'self_loop_two_step').
+            For 'self_loop': alpha + theta <= 1. For 'self_loop_two_step': alpha + theta + gamma <= 1.
+        gamma : float, default 0.0
+            Transition probability to state two steps ahead (only for transition_type='self_loop_two_step').
+            At sequence end (pre-terminal and terminal), transitions diffuse as in original.
         transition_type : str, default 'sequential'
             Type of transition structure:
-            - 'sequential': alpha to next, (1-alpha) diffuses uniformly
-            - 'self_loop': theta to self, alpha to next, rest diffuses uniformly
+            - 'sequential': alpha to next, (1-alpha) diffuses
+            - 'self_loop': theta to self, alpha to next, rest diffuses
+            - 'self_loop_two_step': theta to self, alpha to next, gamma to two ahead, rest diffuses
         initial_dist : str, default 'uniform'
             Initial distribution type:
             - 'uniform': Uniform over all states.
@@ -67,11 +74,14 @@ class GenerativeDenseChain:
         if initial_dist not in ('uniform', 'sequence_starts'):
             raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
         
-        if transition_type not in ('sequential', 'self_loop'):
-            raise ValueError(f"transition_type must be 'sequential' or 'self_loop', got '{transition_type}'")
+        if transition_type not in ('sequential', 'self_loop', 'self_loop_two_step'):
+            raise ValueError(f"transition_type must be 'sequential', 'self_loop', or 'self_loop_two_step', got '{transition_type}'")
         
         if transition_type == 'self_loop' and alpha + theta > 1:
             raise ValueError(f"alpha + theta must be <= 1, got {alpha} + {theta} = {alpha + theta}")
+        
+        if transition_type == 'self_loop_two_step' and alpha + theta + gamma > 1:
+            raise ValueError(f"alpha + theta + gamma must be <= 1, got {alpha} + {theta} + {gamma} = {alpha + theta + gamma}")
         
         if isinstance(sequences, np.ndarray):
             self.states = sequences.copy()
@@ -94,6 +104,7 @@ class GenerativeDenseChain:
         self.k = self.states.shape[1]
         self.alpha = alpha
         self.theta = theta
+        self.gamma = gamma
         self.transition_type = transition_type
         self.initial_dist = initial_dist
         
@@ -110,6 +121,7 @@ class GenerativeDenseChain:
         dist: np.ndarray,
         alpha: Optional[float] = None,
         theta: Optional[float] = None,
+        gamma: Optional[float] = None,
         transition_type: Optional[TransitionType] = None
     ) -> np.ndarray:
         """
@@ -126,6 +138,8 @@ class GenerativeDenseChain:
             Transition probability to next state. Uses instance default if not specified.
         theta : float, optional
             Self-loop probability. Uses instance default if not specified.
+        gamma : float, optional
+            Transition probability to state two steps ahead. Uses instance default if not specified.
         transition_type : str, optional
             Transition structure type. Uses instance default if not specified.
             
@@ -139,6 +153,8 @@ class GenerativeDenseChain:
             alpha = self.alpha
         if theta is None:
             theta = self.theta
+        if gamma is None:
+            gamma = self.gamma
         if transition_type is None:
             transition_type = self.transition_type
         
@@ -153,129 +169,109 @@ class GenerativeDenseChain:
             return self._transition_sequential(dist, alpha)
         elif transition_type == 'self_loop':
             return self._transition_self_loop(dist, alpha, theta)
+        elif transition_type == 'self_loop_two_step':
+            return self._transition_self_loop_two_step(dist, alpha, theta, gamma)
         else:
             raise ValueError(f"Unknown transition type: {transition_type}")
     
     def _transition_sequential(self, dist: np.ndarray, alpha: float) -> np.ndarray:
         """
-        Sequential transition: alpha to next state, (1-alpha) diffuses uniformly.
-        
-        Transition matrix structure:
-        - P(next state | non-terminal) = alpha
-        - P(other states | non-terminal) = (1-alpha)/(n-1) each
-        - P(any state | terminal) = 1/n (uniform diffusion)
-        
-        Parameters
-        ----------
-        dist : np.ndarray
-            Current state distribution (length n_states).
-        alpha : float
-            Transition probability to next sequential state.
-            
-        Returns
-        -------
-        np.ndarray
-            New state distribution after transition.
+        Sequential transition (no-wrap): alpha to next state, (1-alpha) diffuses uniformly.
+        State 0 gets no inflow from the chain; mass that would wrap is added to state 0.
         """
         n = self.n_states
         beta = (1 - alpha) / (n - 1)
-        
-        # Separate terminal and non-terminal contributions
+
         non_terminal_dist = dist * (~self.terminal_mask).astype(float)
         terminal_prob = (dist * self.terminal_mask.astype(float)).sum()
         non_terminal_sum = non_terminal_dist.sum()
-        
-        # Roll for sequential transition from non-terminal states
-        rolled = np.roll(non_terminal_dist, 1)
-        
-        # Combine contributions:
-        # - rolled * (alpha - beta): extra probability from sequential transition
-        # - beta * non_terminal_sum: base uniform contribution from non-terminal states
-        # - terminal_prob / n: uniform contribution from terminal states
-        new_dist = rolled * (alpha - beta) + beta * non_terminal_sum + terminal_prob / n
-        
+        shifted = np.zeros(n)
+        shifted[1:n] = non_terminal_dist[: n - 1]
+        last_nt_idx = np.where(~self.terminal_mask)[0][-1]
+        wrap_to_zero = np.zeros(n)
+        wrap_to_zero[0] = (alpha - beta) * non_terminal_dist[last_nt_idx]
+
+        new_dist = (alpha - beta) * shifted + beta * non_terminal_sum + terminal_prob / n + wrap_to_zero
         return new_dist
     
     def _transition_self_loop(self, dist: np.ndarray, alpha: float, theta: float) -> np.ndarray:
         """
-        Self-loop transition: theta to self, alpha to next, rest diffuses uniformly.
-        
-        Transition matrix structure:
-        - P(same state | any state) = theta (self-loop)
-        - P(next state | non-terminal) = alpha
-        - P(other states | non-terminal) = (1-alpha-theta)/(n-2) each
-        - P(other states | terminal) = (1-theta)/(n-1) each
-        
-        Mathematical derivation for efficient computation:
-        -------------------------------------------------
-        Let gamma = 1 - alpha - theta (diffusion probability)
-        Let beta_nt = gamma / (n-2) (per-state diffusion from non-terminal)
-        Let beta_t = (1-theta) / (n-1) (per-state diffusion from terminal)
-        
-        For state i, the incoming probability is:
-          new_dist[i] = theta * dist[i]                    # self-loop
-                      + alpha * rolled_nt[i]               # sequential from predecessor
-                      + beta_nt * (NT_sum - dist[i]*(i is NT) - rolled_nt[i])
-                      + beta_t * (T_sum - dist[i]*(i is T))
-        
-        This can be vectorized as:
-          new_dist = theta * dist
-                   + alpha * rolled_nt
-                   + beta_nt * NT_sum - beta_nt * NT_dist - beta_nt * rolled_nt
-                   + beta_t * T_sum - beta_t * T_dist
-        
-        Parameters
-        ----------
-        dist : np.ndarray
-            Current state distribution (length n_states).
-        alpha : float
-            Transition probability to next sequential state.
-        theta : float
-            Self-loop probability (staying in same state).
-            
-        Returns
-        -------
-        np.ndarray
-            New state distribution after transition.
+        Self-loop transition (no-wrap): theta to self, alpha to next, rest diffuse.
+        State 0 gets no inflow from the chain; wrap mass is added to state 0.
         """
         n = self.n_states
-        
-        # Edge case: n=2 means no "other" states for non-terminal diffusion
-        # Both terminal and non-terminal simplify to: theta to self, (1-theta) to other
+
         if n == 2:
             return theta * dist + (1 - theta) * np.roll(dist, 1)
-        
-        # General case: n >= 3
-        gamma = 1 - alpha - theta
-        beta_nt = gamma / (n - 2)  # diffusion per state from non-terminal
-        beta_t = (1 - theta) / (n - 1)  # diffusion per state from terminal
-        
-        # Separate terminal and non-terminal distributions
+
+        gamma_diff = 1 - alpha - theta
+        beta_nt = gamma_diff / (n - 2)
+        beta_t = (1 - theta) / (n - 1)
+
         non_terminal_dist = dist * (~self.terminal_mask).astype(float)
         terminal_dist = dist * self.terminal_mask.astype(float)
         non_terminal_sum = non_terminal_dist.sum()
         terminal_sum = terminal_dist.sum()
-        
-        # Roll non-terminal distribution for sequential transition
-        rolled_nt = np.roll(non_terminal_dist, 1)
-        
-        # 1. Self-loop: everyone contributes theta to themselves
+        shifted = np.zeros(n)
+        shifted[1:n] = non_terminal_dist[: n - 1]
+        last_nt_idx = np.where(~self.terminal_mask)[0][-1]
+
         self_loop = theta * dist
-        
-        # 2. Sequential: non-terminal states contribute alpha to successor
-        sequential = alpha * rolled_nt
-        
-        # 3. NT diffusion: each state gets beta_nt from all NT states except self and predecessor
-        #    = beta_nt * NT_sum - beta_nt * (self if NT) - beta_nt * (predecessor if NT)
-        nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * rolled_nt
-        
-        # 4. T diffusion: each state gets beta_t from all T states except self
-        #    = beta_t * T_sum - beta_t * (self if T)
+        sequential = alpha * shifted
+        wrap_to_zero = np.zeros(n)
+        wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
+        nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * shifted
+        nt_diffusion[0] -= beta_nt * non_terminal_dist[last_nt_idx]
         t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
-        
-        new_dist = self_loop + sequential + nt_diffusion + t_diffusion
-        
-        return new_dist
+
+        return self_loop + sequential + nt_diffusion + t_diffusion + wrap_to_zero
+    
+    def _transition_self_loop_two_step(self, dist: np.ndarray, alpha: float, theta: float, gamma: float) -> np.ndarray:
+        """
+        Self-loop + two-step (no-wrap): theta to self, alpha to next, gamma to two ahead, rest diffuse.
+        At pre-terminal and terminal states, transition diffuses as in original types.
+        """
+        n = self.n_states
+
+        if n == 2:
+            return theta * dist + (1 - theta) * np.roll(dist, 1)
+
+        terminal_dist = dist * self.terminal_mask.astype(float)
+        terminal_sum = terminal_dist.sum()
+        beta_t = (1 - theta) / (n - 1)
+        pre_terminal_mask = np.roll(self.terminal_mask, -1)
+        pre_terminal_dist = dist * (~self.terminal_mask).astype(float) * pre_terminal_mask.astype(float)
+        pre_terminal_sum = pre_terminal_dist.sum()
+        has_two_mask = (~self.terminal_mask) & (~pre_terminal_mask)
+        has_two_dist = dist * has_two_mask.astype(float)
+        has_two_sum = has_two_dist.sum()
+
+        self_loop = theta * dist
+        t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
+
+        if pre_terminal_sum > 0 and n >= 3:
+            beta_pre = (1 - theta - alpha) / (n - 2)
+            shifted_pre = np.zeros(n)
+            shifted_pre[1:n] = pre_terminal_dist[: n - 1]
+            pre_contrib = alpha * shifted_pre + beta_pre * (pre_terminal_sum - pre_terminal_dist - shifted_pre)
+        else:
+            pre_contrib = np.zeros(n)
+
+        if has_two_sum > 0:
+            shifted_1_ht = np.zeros(n)
+            shifted_1_ht[1:n] = has_two_dist[: n - 1]
+            shifted_2_ht = np.zeros(n)
+            shifted_2_ht[2:n] = has_two_dist[: n - 2]
+            if n == 3:
+                beta_ht = (1 - theta - alpha - gamma) / n
+                has_two_contrib = (theta - beta_ht) * has_two_dist + (alpha - beta_ht) * shifted_1_ht + (gamma - beta_ht) * shifted_2_ht + beta_ht * has_two_sum
+            else:
+                beta_ht = (1 - theta - alpha - gamma) / (n - 3)
+                has_two_contrib = (theta - beta_ht) * has_two_dist + (alpha - beta_ht) * shifted_1_ht + (gamma - beta_ht) * shifted_2_ht + beta_ht * has_two_sum
+        else:
+            has_two_contrib = np.zeros(n)
+
+        return self_loop + t_diffusion + pre_contrib + has_two_contrib
     
     def _emission_likelihood(self, observation: np.ndarray) -> np.ndarray:
         """
@@ -325,6 +321,7 @@ class GenerativeDenseChain:
         observations: np.ndarray,
         alpha: Optional[float] = None,
         theta: Optional[float] = None,
+        gamma: Optional[float] = None,
         transition_type: Optional[TransitionType] = None,
         initial_dist: Optional[str] = None,
         return_history: bool = False
@@ -340,6 +337,8 @@ class GenerativeDenseChain:
             Transition probability to next state. Uses instance default if not specified.
         theta : float, optional
             Self-loop probability. Uses instance default if not specified.
+        gamma : float, optional
+            Transition probability to state two steps ahead. Uses instance default if not specified.
         transition_type : str, optional
             Transition structure type. Uses instance default if not specified.
         initial_dist : str, optional
@@ -369,7 +368,7 @@ class GenerativeDenseChain:
         for t, obs in enumerate(observations):
             # Apply transition (skip for first observation)
             if t > 0:
-                dist = self._transition(dist, alpha, theta, transition_type)
+                dist = self._transition(dist, alpha, theta, gamma, transition_type)
             
             # Apply emission likelihood and normalize in one step
             matching_indices = self._state_to_indices.get(tuple(obs), [])
@@ -404,6 +403,7 @@ class GenerativeDenseChain:
         n_steps: int,
         alpha: Optional[float] = None,
         theta: Optional[float] = None,
+        gamma: Optional[float] = None,
         transition_type: Optional[TransitionType] = None,
         return_history: bool = False
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
@@ -420,6 +420,8 @@ class GenerativeDenseChain:
             Transition probability to next state. Uses instance default if not specified.
         theta : float, optional
             Self-loop probability. Uses instance default if not specified.
+        gamma : float, optional
+            Transition probability to state two steps ahead. Uses instance default if not specified.
         transition_type : str, optional
             Transition structure type. Uses instance default if not specified.
         return_history : bool, default False
@@ -439,7 +441,7 @@ class GenerativeDenseChain:
             history = []
         
         for _ in range(n_steps):
-            dist = self._transition(dist, alpha, theta, transition_type)
+            dist = self._transition(dist, alpha, theta, gamma, transition_type)
             if return_history:
                 history.append(dist.copy())
         
@@ -720,3 +722,14 @@ if __name__ == "__main__":
     print("Using sequential model but overriding to self_loop at runtime:")
     override_trans = gdc._transition(initial, transition_type='self_loop', theta=0.15)
     print(f"  Override result: {override_trans}")
+
+    # Third option: self_loop_two_step (self-loop + two-step gamma)
+    print("\n=== Self-Loop Two-Step (Gamma) Demo ===\n")
+    gdc_sl2 = GenerativeDenseChain(
+        sequence, alpha=0.5, theta=0.1, gamma=0.2, transition_type='self_loop_two_step'
+    )
+    print(f"Transition type: {gdc_sl2.transition_type}")
+    print(f"Alpha (next): {gdc_sl2.alpha}, Theta (self): {gdc_sl2.theta}, Gamma (two ahead): {gdc_sl2.gamma}")
+    sl2_trans = gdc_sl2._transition(initial)
+    print(f"  From state 0: {sl2_trans}")
+    print(f"  Sum: {sl2_trans.sum():.6f}")

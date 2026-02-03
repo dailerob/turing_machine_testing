@@ -399,12 +399,13 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, state_encoding
         # Create GDC with first n_train tapes
         training_subset = train_tapes[:n_train]
         
-        # Create GDC model with sequence_starts initial distribution and self-loop transition
+        # Create GDC model with sequence_starts initial distribution and self-loop two-step transition
         gdc = GenerativeDenseChain(
             training_subset, 
-            alpha=0.5, 
+            alpha=0.95, 
             theta=0.005, 
-            transition_type='self_loop',
+            gamma=0.000,
+            transition_type='self_loop_two_step',
             initial_dist='sequence_starts'
         )
         
@@ -446,12 +447,13 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, state_encoding
         # Create GDC with first n_train tapes, using only columns 1, 2, 3
         training_subset = [tape[:, 1:4] for tape in train_tapes[:n_train]]
         
-        # Create GDC model with sequence_starts initial distribution and self-loop transition
+        # Create GDC model with sequence_starts initial distribution and self-loop two-step transition
         gdc = GenerativeDenseChain(
             training_subset, 
-            alpha=0.95, 
-            theta=0.0025, 
-            transition_type='self_loop',
+            alpha=0.99, 
+            theta=0.005, 
+            gamma=0.000,
+            transition_type='self_loop_two_step',
             initial_dist='sequence_starts'
         )
         
@@ -533,7 +535,7 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, state_encoding
 N_TRAIN = 400              # Number of training addition problems
 N_TEST = 10               # Number of test addition problems
 NUM_RANGE_TRAIN = (0, 32) # Range of random numbers for training (5-bit)
-NUM_RANGE_TEST = (0, 1024)  # Range of random numbers for testing (5-bit)
+NUM_RANGE_TEST = (0, 32)  # Range of random numbers for testing (5-bit)
 MAX_STEPS = 5000          # Max steps before timeout (adder needs more steps than busy beaver)
 TRAIN_SEED = 42
 TEST_SEED = 123

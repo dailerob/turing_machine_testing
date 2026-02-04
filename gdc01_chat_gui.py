@@ -274,6 +274,7 @@ class GDC01ChatGUI:
                     encoder=self.encoder,
                     alpha=0.9,
                     theta=0.05,
+                    beta=0.01,
                     transition_type='self_loop',
                     initial_dist='sequence_starts'
                 )
@@ -285,7 +286,8 @@ class GDC01ChatGUI:
                 self.root.after(0, self._on_model_loaded)
                 
             except Exception as e:
-                self.root.after(0, lambda: self._set_status(f"Error: {str(e)}", "#ff4444"))
+                error_msg = str(e)
+                self.root.after(0, lambda msg=error_msg: self._set_status(f"Error: {msg}", "#ff4444"))
         
         thread = threading.Thread(target=load, daemon=True)
         thread.start()
@@ -374,7 +376,8 @@ class GDC01ChatGUI:
                 self.root.after(0, lambda: self._display_response(response))
                 
             except Exception as e:
-                self.root.after(0, lambda: self._display_error(str(e)))
+                error_msg = str(e)
+                self.root.after(0, lambda msg=error_msg: self._display_error(msg))
         
         thread = threading.Thread(target=generate, daemon=True)
         thread.start()
@@ -467,6 +470,7 @@ class GDC01ChatGUI:
                     encoder=self.encoder,
                     alpha=0.9,
                     theta=0.05,
+                    beta=0.01,
                     transition_type='self_loop',
                     initial_dist='sequence_starts'
                 )
@@ -478,7 +482,8 @@ class GDC01ChatGUI:
                 self.root.after(0, self._on_training_data_added)
                 
             except Exception as e:
-                self.root.after(0, lambda: self._on_training_data_error(str(e)))
+                error_msg = str(e)
+                self.root.after(0, lambda msg=error_msg: self._on_training_data_error(msg))
         
         thread = threading.Thread(target=update, daemon=True)
         thread.start()

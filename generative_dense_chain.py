@@ -2,7 +2,10 @@
 Generative Dense Chain (GDC) - A training-free Hidden Markov Model variant.
 
 The model assumes:
-- Emission: P(obs|state) = 1 if obs == state exactly, 0 otherwise
+- Emission: P(obs|state) configurable via beta parameter:
+  - beta=0 (default): Deterministic, P(obs|state) = 1 if obs == state, 0 otherwise
+  - beta>0: Noisy, P(obs|state) = (1-beta) if obs==state else 0, plus beta/V uniform
+    where V is the vocabulary size (number of unique states)
 - Transition: Configurable (see transition_type parameter)
 - Initial distribution: Uniform (over all states or sequence starts)
 
@@ -41,6 +44,7 @@ class GenerativeDenseChain:
         alpha: float = 0.8,
         theta: float = 0.1,
         gamma: float = 0.0,
+        beta: float = 0.0,
         transition_type: TransitionType = 'sequential',
         initial_dist: str = 'uniform'
     ):
@@ -61,6 +65,12 @@ class GenerativeDenseChain:
         gamma : float, default 0.0
             Transition probability to state two steps ahead (only for transition_type='self_loop_two_step').
             At sequence end (pre-terminal and terminal), transitions diffuse as in original.
+        beta : float, default 0.0
+            Emission noise probability. With probability beta, a state emits a random symbol
+            uniformly from the vocabulary (set of unique states) instead of its own symbol.
+            - beta=0: Deterministic emission (P(obs|state)=1 if match, 0 otherwise)
+            - beta>0: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
+            where V is the vocabulary size.
         transition_type : str, default 'sequential'
             Type of transition structure:
             - 'sequential': alpha to next, (1-alpha) diffuses
@@ -73,6 +83,9 @@ class GenerativeDenseChain:
         """
         if initial_dist not in ('uniform', 'sequence_starts'):
             raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
+        
+        if not 0 <= beta <= 1:
+            raise ValueError(f"beta must be in [0, 1], got {beta}")
         
         if transition_type not in ('sequential', 'self_loop', 'self_loop_two_step'):
             raise ValueError(f"transition_type must be 'sequential', 'self_loop', or 'self_loop_two_step', got '{transition_type}'")
@@ -105,6 +118,7 @@ class GenerativeDenseChain:
         self.alpha = alpha
         self.theta = theta
         self.gamma = gamma
+        self.beta = beta
         self.transition_type = transition_type
         self.initial_dist = initial_dist
         
@@ -115,6 +129,9 @@ class GenerativeDenseChain:
             if key not in self._state_to_indices:
                 self._state_to_indices[key] = []
             self._state_to_indices[key].append(i)
+        
+        # Vocabulary size for noisy emission (beta > 0)
+        self.vocab_size = len(self._state_to_indices)
     
     def _transition(
         self,
@@ -180,7 +197,7 @@ class GenerativeDenseChain:
         State 0 gets no inflow from the chain; mass that would wrap is added to state 0.
         """
         n = self.n_states
-        beta = (1 - alpha) / (n - 1)
+        diffuse_rate = (1 - alpha) / (n - 1)
 
         non_terminal_dist = dist * (~self.terminal_mask).astype(float)
         terminal_prob = (dist * self.terminal_mask.astype(float)).sum()
@@ -189,9 +206,9 @@ class GenerativeDenseChain:
         shifted[1:n] = non_terminal_dist[: n - 1]
         last_nt_idx = np.where(~self.terminal_mask)[0][-1]
         wrap_to_zero = np.zeros(n)
-        #wrap_to_zero[0] = (alpha - beta) * non_terminal_dist[last_nt_idx]
+        #wrap_to_zero[0] = (alpha - diffuse_rate) * non_terminal_dist[last_nt_idx]
 
-        new_dist = (alpha - beta) * shifted + beta * non_terminal_sum + terminal_prob / n + wrap_to_zero
+        new_dist = (alpha - diffuse_rate) * shifted + diffuse_rate * non_terminal_sum + terminal_prob / n + wrap_to_zero
         return new_dist
     
     def _transition_self_loop(self, dist: np.ndarray, alpha: float, theta: float) -> np.ndarray:
@@ -205,8 +222,8 @@ class GenerativeDenseChain:
             return theta * dist + (1 - theta) * np.roll(dist, 1)
 
         gamma_diff = 1 - alpha - theta
-        beta_nt = gamma_diff / (n - 2)
-        beta_t = (1 - theta) / (n - 1)
+        diffuse_nt = gamma_diff / (n - 2)
+        diffuse_t = (1 - theta) / (n - 1)
 
         non_terminal_dist = dist * (~self.terminal_mask).astype(float)
         terminal_dist = dist * self.terminal_mask.astype(float)
@@ -220,9 +237,9 @@ class GenerativeDenseChain:
         sequential = alpha * shifted
         wrap_to_zero = np.zeros(n)
         #wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
-        nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * shifted
-        nt_diffusion[0] -= beta_nt * non_terminal_dist[last_nt_idx]
-        t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
+        nt_diffusion = diffuse_nt * non_terminal_sum - diffuse_nt * non_terminal_dist - diffuse_nt * shifted
+        nt_diffusion[0] -= diffuse_nt * non_terminal_dist[last_nt_idx]
+        t_diffusion = diffuse_t * terminal_sum - diffuse_t * terminal_dist
 
         return self_loop + sequential + nt_diffusion + t_diffusion + wrap_to_zero
     
@@ -238,7 +255,7 @@ class GenerativeDenseChain:
 
         terminal_dist = dist * self.terminal_mask.astype(float)
         terminal_sum = terminal_dist.sum()
-        beta_t = (1 - theta) / (n - 1)
+        diffuse_t = (1 - theta) / (n - 1)
         pre_terminal_mask = np.roll(self.terminal_mask, -1)
         pre_terminal_dist = dist * (~self.terminal_mask).astype(float) * pre_terminal_mask.astype(float)
         pre_terminal_sum = pre_terminal_dist.sum()
@@ -247,13 +264,13 @@ class GenerativeDenseChain:
         has_two_sum = has_two_dist.sum()
 
         self_loop = theta * dist
-        t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
+        t_diffusion = diffuse_t * terminal_sum - diffuse_t * terminal_dist
 
         if pre_terminal_sum > 0 and n >= 3:
-            beta_pre = (1 - theta - alpha) / (n - 2)
+            diffuse_pre = (1 - theta - alpha) / (n - 2)
             shifted_pre = np.zeros(n)
             shifted_pre[1:n] = pre_terminal_dist[: n - 1]
-            pre_contrib = alpha * shifted_pre + beta_pre * (pre_terminal_sum - pre_terminal_dist - shifted_pre)
+            pre_contrib = alpha * shifted_pre + diffuse_pre * (pre_terminal_sum - pre_terminal_dist - shifted_pre)
         else:
             pre_contrib = np.zeros(n)
 
@@ -263,11 +280,11 @@ class GenerativeDenseChain:
             shifted_2_ht = np.zeros(n)
             shifted_2_ht[2:n] = has_two_dist[: n - 2]
             if n == 3:
-                beta_ht = (1 - theta - alpha - gamma) / n
-                has_two_contrib = (theta - beta_ht) * has_two_dist + (alpha - beta_ht) * shifted_1_ht + (gamma - beta_ht) * shifted_2_ht + beta_ht * has_two_sum
+                diffuse_ht = (1 - theta - alpha - gamma) / n
+                has_two_contrib = (theta - diffuse_ht) * has_two_dist + (alpha - diffuse_ht) * shifted_1_ht + (gamma - diffuse_ht) * shifted_2_ht + diffuse_ht * has_two_sum
             else:
-                beta_ht = (1 - theta - alpha - gamma) / (n - 3)
-                has_two_contrib = (theta - beta_ht) * has_two_dist + (alpha - beta_ht) * shifted_1_ht + (gamma - beta_ht) * shifted_2_ht + beta_ht * has_two_sum
+                diffuse_ht = (1 - theta - alpha - gamma) / (n - 3)
+                has_two_contrib = (theta - diffuse_ht) * has_two_dist + (alpha - diffuse_ht) * shifted_1_ht + (gamma - diffuse_ht) * shifted_2_ht + diffuse_ht * has_two_sum
         else:
             has_two_contrib = np.zeros(n)
 
@@ -322,6 +339,7 @@ class GenerativeDenseChain:
         alpha: Optional[float] = None,
         theta: Optional[float] = None,
         gamma: Optional[float] = None,
+        beta: Optional[float] = None,
         transition_type: Optional[TransitionType] = None,
         initial_dist: Optional[str] = None,
         return_history: bool = False
@@ -339,6 +357,10 @@ class GenerativeDenseChain:
             Self-loop probability. Uses instance default if not specified.
         gamma : float, optional
             Transition probability to state two steps ahead. Uses instance default if not specified.
+        beta : float, optional
+            Emission noise probability. Uses instance default if not specified.
+            - beta=0: Deterministic emission (P(obs|state)=1 if match, 0 otherwise)
+            - beta>0: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
         transition_type : str, optional
             Transition structure type. Uses instance default if not specified.
         initial_dist : str, optional
@@ -358,6 +380,10 @@ class GenerativeDenseChain:
         """
         n = self.n_states
         
+        # Use instance defaults for unspecified parameters
+        if beta is None:
+            beta = self.beta
+        
         # Get initial distribution
         dist = self._get_initial_distribution(initial_dist)
         
@@ -365,30 +391,63 @@ class GenerativeDenseChain:
         if return_history:
             history = np.empty((len(observations), n))
         
+        # Precompute emission constants for beta > 0
+        if beta > 0:
+            V = self.vocab_size
+            beta_over_V = beta / V
+        
         for t, obs in enumerate(observations):
             # Apply transition (skip for first observation)
             if t > 0:
                 dist = self._transition(dist, alpha, theta, gamma, transition_type)
             
-            # Apply emission likelihood and normalize in one step
+            # Apply emission likelihood and normalize
             matching_indices = self._state_to_indices.get(tuple(obs), [])
             
-            if matching_indices:
-                # Extract probabilities only at matching indices
-                matched_probs = dist[matching_indices]
-                total = matched_probs.sum()
-                
-                if total > 0:
-                    # Zero out and set only matching states
-                    new_dist = np.zeros(n)
-                    new_dist[matching_indices] = matched_probs / total
-                    dist = new_dist
+            if beta == 0:
+                # Deterministic emission: O(1) lookup, O(m) update for m matches
+                if matching_indices:
+                    # Extract probabilities only at matching indices
+                    matched_probs = dist[matching_indices]
+                    total = matched_probs.sum()
+                    
+                    if total > 0:
+                        # Zero out and set only matching states
+                        new_dist = np.zeros(n)
+                        new_dist[matching_indices] = matched_probs / total
+                        dist = new_dist
+                    else:
+                        # Matching states have zero probability - return to uniform
+                        dist = np.ones(n) / n
                 else:
-                    # Matching states have zero probability - return to uniform
+                    # No state matches observation - return to uniform
                     dist = np.ones(n) / n
             else:
-                # No state matches observation - return to uniform
-                dist = np.ones(n) / n
+                # Noisy emission: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
+                # Uses O(1) lookup for matches, O(n) vectorized update
+                if matching_indices:
+                    matched_probs = dist[matching_indices]
+                    sum_match = matched_probs.sum()
+                else:
+                    sum_match = 0.0
+                
+                total_dist = dist.sum()
+                
+                # Unnormalized probability mass:
+                # sum_match * ((1-beta) + beta/V) + (total - sum_match) * (beta/V)
+                # = sum_match * (1-beta) + total * (beta/V)
+                unnorm_total = sum_match * (1 - beta) + total_dist * beta_over_V
+                
+                if unnorm_total > 0:
+                    # Scale all states by beta/V / unnorm_total
+                    new_dist = dist * (beta_over_V / unnorm_total)
+                    # Add bonus (1-beta) / unnorm_total to matching states
+                    if matching_indices:
+                        new_dist[matching_indices] += matched_probs * ((1 - beta) / unnorm_total)
+                    dist = new_dist
+                else:
+                    # All states have zero unnormalized probability - return to uniform
+                    dist = np.ones(n) / n
             
             if return_history:
                 history[t] = dist
@@ -733,3 +792,40 @@ if __name__ == "__main__":
     sl2_trans = gdc_sl2._transition(initial)
     print(f"  From state 0: {sl2_trans}")
     print(f"  Sum: {sl2_trans.sum():.6f}")
+    
+    # Demo with emission noise (beta)
+    print("\n=== Emission Noise (Beta) Demo ===\n")
+    
+    # Create model with noisy emissions
+    gdc_noisy = GenerativeDenseChain(sequence, alpha=0.8, beta=0.2)
+    print(f"Beta (emission noise): {gdc_noisy.beta}")
+    print(f"Vocabulary size: {gdc_noisy.vocab_size}")
+    print(f"P(obs|match) = (1-beta) + beta/V = {1 - gdc_noisy.beta + gdc_noisy.beta / gdc_noisy.vocab_size:.4f}")
+    print(f"P(obs|no match) = beta/V = {gdc_noisy.beta / gdc_noisy.vocab_size:.4f}\n")
+    
+    # Compare forward pass with and without beta
+    print("Comparing forward pass with observation [0, 0]:")
+    obs_single = np.array([[0, 0]])
+    
+    # Deterministic (beta=0)
+    dist_det = gdc.forward_pass(obs_single)
+    print(f"  Deterministic (beta=0): {dist_det}")
+    
+    # Noisy (beta=0.2)
+    dist_noisy = gdc_noisy.forward_pass(obs_single)
+    print(f"  Noisy (beta=0.2): {dist_noisy}")
+    
+    # Runtime override
+    dist_override = gdc.forward_pass(obs_single, beta=0.2)
+    print(f"  Runtime override (beta=0.2): {dist_override}")
+    
+    # Multiple observations - noisy emission retains some probability on non-matching states
+    print("\nAfter observing [[0, 0], [0, 1], [1, 0]]:")
+    obs_multi = np.array([[0, 0], [0, 1], [1, 0]])
+    
+    dist_det_multi = gdc.forward_pass(obs_multi)
+    dist_noisy_multi = gdc_noisy.forward_pass(obs_multi)
+    
+    print(f"  Deterministic: {dist_det_multi}")
+    print(f"  Noisy (beta=0.2): {dist_noisy_multi}")
+    print(f"  Note: Noisy emission retains probability on non-matching states")

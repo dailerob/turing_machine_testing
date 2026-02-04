@@ -22,7 +22,13 @@ class TextEncoder:
     """
     Handles conversion between text (strings) and integer arrays.
     Uses character-level encoding with a dynamic vocabulary.
+    
+    Unknown characters (not seen during fit) are encoded with a special code (-1)
+    that won't match any state, causing the model to fall back to uniform distribution.
     """
+    
+    # Special code for unknown characters (won't match any valid state)
+    UNKNOWN_CODE = -1
     
     def __init__(self):
         self.char_to_int: dict = {}
@@ -61,6 +67,9 @@ class TextEncoder:
         """
         Convert text to integer array.
         
+        Unknown characters are encoded as UNKNOWN_CODE (-1), which won't match
+        any state in the GDC model, causing it to fall back to uniform distribution.
+        
         Parameters
         ----------
         text : str
@@ -71,7 +80,10 @@ class TextEncoder:
         np.ndarray
             Array of shape (len(text), 1) with integer character codes.
         """
-        encoded = np.array([[self.char_to_int[char]] for char in text], dtype=np.int32)
+        encoded = np.array(
+            [[self.char_to_int.get(char, self.UNKNOWN_CODE)] for char in text],
+            dtype=np.int32
+        )
         return encoded
     
     def decode(self, encoded: np.ndarray) -> str:
@@ -96,8 +108,8 @@ class TextEncoder:
         return ''.join(chars)
     
     def encode_char(self, char: str) -> int:
-        """Encode a single character to its integer code."""
-        return self.char_to_int.get(char, -1)
+        """Encode a single character to its integer code. Returns UNKNOWN_CODE for unknown chars."""
+        return self.char_to_int.get(char, self.UNKNOWN_CODE)
     
     def decode_int(self, code: int) -> str:
         """Decode a single integer code to its character."""
@@ -148,6 +160,7 @@ def build_gdc_model(
     encoder: TextEncoder,
     alpha: float = 0.9,
     theta: float = 0.05,
+    beta: float = 0.0,
     transition_type: str = 'self_loop',
     initial_dist: str = 'sequence_starts'
 ) -> GenerativeDenseChain:
@@ -164,6 +177,8 @@ def build_gdc_model(
         Transition probability to next sequential state.
     theta : float
         Self-loop probability.
+    beta : float
+        Emission noise probability (probability of emitting a random symbol).
     transition_type : str
         Type of transition structure.
     initial_dist : str
@@ -185,6 +200,7 @@ def build_gdc_model(
         sequences=sequences,
         alpha=alpha,
         theta=theta,
+        beta=beta,
         transition_type=transition_type,
         initial_dist=initial_dist
     )

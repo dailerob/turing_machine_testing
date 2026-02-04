@@ -535,7 +535,7 @@ def run_tests(train_tapes, train_halted, test_tapes, test_halted, state_encoding
 N_TRAIN = 400              # Number of training addition problems
 N_TEST = 10               # Number of test addition problems
 NUM_RANGE_TRAIN = (0, 32) # Range of random numbers for training (5-bit)
-NUM_RANGE_TEST = (0, 32)  # Range of random numbers for testing (5-bit)
+NUM_RANGE_TEST = (0, 1000)  # Range of random numbers for testing (5-bit)
 MAX_STEPS = 5000          # Max steps before timeout (adder needs more steps than busy beaver)
 TRAIN_SEED = 42
 TEST_SEED = 123

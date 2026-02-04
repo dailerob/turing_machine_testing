@@ -46,7 +46,8 @@ class GenerativeDenseChain:
         gamma: float = 0.0,
         beta: float = 0.0,
         transition_type: TransitionType = 'sequential',
-        initial_dist: str = 'uniform'
+        initial_dist: str = 'uniform',
+        partial_match: bool = False
     ):
         """
         Initialize a Generative Dense Chain.
@@ -66,11 +67,15 @@ class GenerativeDenseChain:
             Transition probability to state two steps ahead (only for transition_type='self_loop_two_step').
             At sequence end (pre-terminal and terminal), transitions diffuse as in original.
         beta : float, default 0.0
-            Emission noise probability. With probability beta, a state emits a random symbol
-            uniformly from the vocabulary (set of unique states) instead of its own symbol.
-            - beta=0: Deterministic emission (P(obs|state)=1 if match, 0 otherwise)
-            - beta>0: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
-            where V is the vocabulary size.
+            Emission noise probability.
+            - When partial_match=False:
+              - beta=0: Deterministic emission (P(obs|state)=1 if match, 0 otherwise)
+              - beta>0: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
+              where V is the vocabulary size.
+            - When partial_match=True:
+              - P(obs|state) = (1-beta) * (m/k) + beta/n
+              where m is the number of matching elements, k is vector length, n is number of states.
+              beta acts as a floor probability for complete mismatches.
         transition_type : str, default 'sequential'
             Type of transition structure:
             - 'sequential': alpha to next, (1-alpha) diffuses
@@ -80,6 +85,10 @@ class GenerativeDenseChain:
             Initial distribution type:
             - 'uniform': Uniform over all states.
             - 'sequence_starts': Uniform over the first state of each sequence.
+        partial_match : bool, default False
+            If True, emission likelihood is based on the proportion of matching elements
+            rather than requiring exact matches. Enables soft matching where states with
+            more matching elements get higher likelihood.
         """
         if initial_dist not in ('uniform', 'sequence_starts'):
             raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
@@ -121,8 +130,9 @@ class GenerativeDenseChain:
         self.beta = beta
         self.transition_type = transition_type
         self.initial_dist = initial_dist
+        self.partial_match = partial_match
         
-        # Build state index for O(1) emission lookups
+        # Build state index for O(1) emission lookups (exact match)
         self._state_to_indices: dict[tuple, list[int]] = {}
         for i, row in enumerate(self.states):
             key = tuple(row)
@@ -132,6 +142,19 @@ class GenerativeDenseChain:
         
         # Vocabulary size for noisy emission (beta > 0)
         self.vocab_size = len(self._state_to_indices)
+        
+        # Build position-value indices for O(k) partial match lookups
+        # _position_value_to_indices[pos][value] = list of state indices with that value at pos
+        if partial_match:
+            self._position_value_to_indices: List[dict] = []
+            for pos in range(self.k):
+                pos_dict: dict = {}
+                for i, row in enumerate(self.states):
+                    val = row[pos]
+                    if val not in pos_dict:
+                        pos_dict[val] = []
+                    pos_dict[val].append(i)
+                self._position_value_to_indices.append(pos_dict)
     
     def _transition(
         self,
@@ -290,7 +313,12 @@ class GenerativeDenseChain:
 
         return self_loop + t_diffusion + pre_contrib + has_two_contrib
     
-    def _emission_likelihood(self, observation: np.ndarray) -> np.ndarray:
+    def _emission_likelihood(
+        self,
+        observation: np.ndarray,
+        beta: Optional[float] = None,
+        partial_match: Optional[bool] = None
+    ) -> np.ndarray:
         """
         Compute emission likelihood for each state given an observation.
         
@@ -298,13 +326,48 @@ class GenerativeDenseChain:
         ----------
         observation : np.ndarray
             Single observation vector (length k).
+        beta : float, optional
+            Emission noise probability. Uses instance default if not specified.
+        partial_match : bool, optional
+            If True, use partial matching. Uses instance default if not specified.
             
         Returns
         -------
         np.ndarray
-            Likelihood for each state (1 if exact match, 0 otherwise).
+            Likelihood for each state (length n_states).
         """
-        return (self.states == observation).all(axis=1).astype(float)
+        if beta is None:
+            beta = self.beta
+        if partial_match is None:
+            partial_match = self.partial_match
+        
+        n = self.n_states
+        k = self.k
+        
+        if partial_match:
+            if not self.partial_match:
+                raise ValueError(
+                    "Cannot use partial_match=True unless the model was "
+                    "initialized with partial_match=True (position indices not built)"
+                )
+            # Count matches per state
+            match_counts = np.zeros(n)
+            for pos in range(k):
+                matching_at_pos = self._position_value_to_indices[pos].get(observation[pos], [])
+                match_counts[matching_at_pos] += 1
+            
+            # P(obs|state) = (1-beta) * (m/k) + beta/n
+            match_proportions = match_counts / k
+            return (1 - beta) * match_proportions + beta / n
+        else:
+            # Exact matching
+            if beta == 0:
+                return (self.states == observation).all(axis=1).astype(float)
+            else:
+                # Noisy emission: (1-beta) + beta/V if match, beta/V otherwise
+                V = self.vocab_size
+                exact_match = (self.states == observation).all(axis=1).astype(float)
+                return (1 - beta) * exact_match + beta / V
     
     def _get_initial_distribution(self, initial_dist: Optional[str] = None) -> np.ndarray:
         """
@@ -342,6 +405,7 @@ class GenerativeDenseChain:
         beta: Optional[float] = None,
         transition_type: Optional[TransitionType] = None,
         initial_dist: Optional[str] = None,
+        partial_match: Optional[bool] = None,
         return_history: bool = False
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """
@@ -359,14 +423,22 @@ class GenerativeDenseChain:
             Transition probability to state two steps ahead. Uses instance default if not specified.
         beta : float, optional
             Emission noise probability. Uses instance default if not specified.
-            - beta=0: Deterministic emission (P(obs|state)=1 if match, 0 otherwise)
-            - beta>0: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
+            - When partial_match=False:
+              - beta=0: Deterministic emission (P(obs|state)=1 if match, 0 otherwise)
+              - beta>0: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
+            - When partial_match=True:
+              - P(obs|state) = (1-beta) * (m/k) + beta/n
+              where m is matching elements, k is vector length, n is number of states.
         transition_type : str, optional
             Transition structure type. Uses instance default if not specified.
         initial_dist : str, optional
             Initial distribution type. Uses instance default if not specified.
             - 'uniform': Uniform over all states.
             - 'sequence_starts': Uniform over the first state of each sequence.
+        partial_match : bool, optional
+            If True, use partial matching for emissions. Uses instance default if not specified.
+            Note: partial_match=True requires the model to be initialized with partial_match=True
+            to have the position indices built.
         return_history : bool, default False
             If True, also return the state distribution at each timestep.
             
@@ -379,10 +451,20 @@ class GenerativeDenseChain:
             Only returned if return_history=True.
         """
         n = self.n_states
+        k = self.k
         
         # Use instance defaults for unspecified parameters
         if beta is None:
             beta = self.beta
+        if partial_match is None:
+            partial_match = self.partial_match
+        
+        # Validate partial_match usage
+        if partial_match and not self.partial_match:
+            raise ValueError(
+                "Cannot use partial_match=True at runtime unless the model was "
+                "initialized with partial_match=True (position indices not built)"
+            )
         
         # Get initial distribution
         dist = self._get_initial_distribution(initial_dist)
@@ -391,63 +473,89 @@ class GenerativeDenseChain:
         if return_history:
             history = np.empty((len(observations), n))
         
-        # Precompute emission constants for beta > 0
-        if beta > 0:
+        # Precompute emission constants
+        if not partial_match and beta > 0:
             V = self.vocab_size
             beta_over_V = beta / V
+        if partial_match:
+            beta_over_n = beta / n
         
         for t, obs in enumerate(observations):
             # Apply transition (skip for first observation)
             if t > 0:
                 dist = self._transition(dist, alpha, theta, gamma, transition_type)
             
-            # Apply emission likelihood and normalize
-            matching_indices = self._state_to_indices.get(tuple(obs), [])
-            
-            if beta == 0:
-                # Deterministic emission: O(1) lookup, O(m) update for m matches
-                if matching_indices:
-                    # Extract probabilities only at matching indices
-                    matched_probs = dist[matching_indices]
-                    total = matched_probs.sum()
-                    
-                    if total > 0:
-                        # Zero out and set only matching states
-                        new_dist = np.zeros(n)
-                        new_dist[matching_indices] = matched_probs / total
-                        dist = new_dist
-                    else:
-                        # Matching states have zero probability - return to uniform
-                        dist = np.ones(n) / n
+            if partial_match:
+                # Partial matching: P(obs|state) = (1-beta) * (m/k) + beta/n
+                # where m is number of matching elements
+                
+                # Count matches per state using position indices: O(k + total_matches)
+                match_counts = np.zeros(n)
+                for pos in range(k):
+                    matching_at_pos = self._position_value_to_indices[pos].get(obs[pos], [])
+                    match_counts[matching_at_pos] += 1
+                
+                # Compute emission likelihood: (1-beta) * (m/k) + beta/n
+                match_proportions = match_counts / k
+                emission_likelihood = (1 - beta) * match_proportions + beta_over_n
+                
+                # Apply emission and normalize
+                unnorm_dist = dist * emission_likelihood
+                total = unnorm_dist.sum()
+                
+                if total > 0:
+                    dist = unnorm_dist / total
                 else:
-                    # No state matches observation - return to uniform
+                    # All states have zero probability - return to uniform
                     dist = np.ones(n) / n
             else:
-                # Noisy emission: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
-                # Uses O(1) lookup for matches, O(n) vectorized update
-                if matching_indices:
-                    matched_probs = dist[matching_indices]
-                    sum_match = matched_probs.sum()
-                else:
-                    sum_match = 0.0
+                # Exact matching (original behavior)
+                matching_indices = self._state_to_indices.get(tuple(obs), [])
                 
-                total_dist = dist.sum()
-                
-                # Unnormalized probability mass:
-                # sum_match * ((1-beta) + beta/V) + (total - sum_match) * (beta/V)
-                # = sum_match * (1-beta) + total * (beta/V)
-                unnorm_total = sum_match * (1 - beta) + total_dist * beta_over_V
-                
-                if unnorm_total > 0:
-                    # Scale all states by beta/V / unnorm_total
-                    new_dist = dist * (beta_over_V / unnorm_total)
-                    # Add bonus (1-beta) / unnorm_total to matching states
+                if beta == 0:
+                    # Deterministic emission: O(1) lookup, O(m) update for m matches
                     if matching_indices:
-                        new_dist[matching_indices] += matched_probs * ((1 - beta) / unnorm_total)
-                    dist = new_dist
+                        # Extract probabilities only at matching indices
+                        matched_probs = dist[matching_indices]
+                        total = matched_probs.sum()
+                        
+                        if total > 0:
+                            # Zero out and set only matching states
+                            new_dist = np.zeros(n)
+                            new_dist[matching_indices] = matched_probs / total
+                            dist = new_dist
+                        else:
+                            # Matching states have zero probability - return to uniform
+                            dist = np.ones(n) / n
+                    else:
+                        # No state matches observation - return to uniform
+                        dist = np.ones(n) / n
                 else:
-                    # All states have zero unnormalized probability - return to uniform
-                    dist = np.ones(n) / n
+                    # Noisy emission: P(obs|state) = (1-beta) + beta/V if match, beta/V otherwise
+                    # Uses O(1) lookup for matches, O(n) vectorized update
+                    if matching_indices:
+                        matched_probs = dist[matching_indices]
+                        sum_match = matched_probs.sum()
+                    else:
+                        sum_match = 0.0
+                    
+                    total_dist = dist.sum()
+                    
+                    # Unnormalized probability mass:
+                    # sum_match * ((1-beta) + beta/V) + (total - sum_match) * (beta/V)
+                    # = sum_match * (1-beta) + total * (beta/V)
+                    unnorm_total = sum_match * (1 - beta) + total_dist * beta_over_V
+                    
+                    if unnorm_total > 0:
+                        # Scale all states by beta/V / unnorm_total
+                        new_dist = dist * (beta_over_V / unnorm_total)
+                        # Add bonus (1-beta) / unnorm_total to matching states
+                        if matching_indices:
+                            new_dist[matching_indices] += matched_probs * ((1 - beta) / unnorm_total)
+                        dist = new_dist
+                    else:
+                        # All states have zero unnormalized probability - return to uniform
+                        dist = np.ones(n) / n
             
             if return_history:
                 history[t] = dist
@@ -586,6 +694,67 @@ class GenerativeDenseChain:
         
         return result
     
+    def mean_sample(
+        self,
+        state_dist: np.ndarray,
+        conditional: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """
+        Return the expected value (probability-weighted average) of state vectors.
+        
+        Computes E[state] = sum(state_i * P(state_i)) / sum(P(state_i))
+        
+        When a conditional is provided, states are first filtered to only those
+        that match the non-NaN values in the conditional array. If no states match,
+        the conditional is ignored.
+        
+        Parameters
+        ----------
+        state_dist : np.ndarray
+            State distribution (length n_states).
+        conditional : np.ndarray, optional
+            k-element array with np.nan for "don't care" positions and specific
+            values for positions that must match. States are filtered to only
+            those matching the non-NaN values. If no states match, ignored.
+            
+        Returns
+        -------
+        np.ndarray
+            Expected value vector (length k). This is a weighted average of all
+            (filtered) state vectors, so values may not correspond to any actual state.
+        """
+        # Apply conditional filtering if provided
+        states = self.states
+        dist = state_dist
+        
+        if conditional is not None:
+            conditional = np.asarray(conditional, dtype=float)
+            # Find which positions have non-NaN values (constraints)
+            constraint_mask = ~np.isnan(conditional)
+            
+            if constraint_mask.any():
+                # Find states that match the conditional values at constrained positions
+                matches = (states[:, constraint_mask] == conditional[constraint_mask]).all(axis=1)
+                
+                # Only apply filtering if at least one state matches
+                if matches.any():
+                    matching_indices = np.where(matches)[0]
+                    states = states[matching_indices]
+                    dist = state_dist[matching_indices]
+        
+        # Normalize distribution
+        total = dist.sum()
+        if total > 0:
+            weights = dist / total
+        else:
+            # Uniform weights if distribution sums to zero
+            weights = np.ones(len(dist)) / len(dist)
+        
+        # Compute expected value: weighted average of states
+        expected_value = (states.T @ weights).astype(float)
+        
+        return expected_value
+    
     def random_sample(
         self,
         state_dist: np.ndarray,
@@ -700,6 +869,11 @@ if __name__ == "__main__":
     
     greedy_masked = gdc.greedy_sample(final_dist, mask=[1, 0])
     print(f"Greedy sample (mask=[1,0]): {greedy_masked}\n")
+    
+    # Mean sample (expected value)
+    mean = gdc.mean_sample(final_dist)
+    print(f"Mean sample (no conditional): {mean}")
+    print(f"  (final_dist={final_dist}, so expected = state[2] = [1,0])\n")
     
     # Random sample
     rng = np.random.default_rng(42)
@@ -829,3 +1003,100 @@ if __name__ == "__main__":
     print(f"  Deterministic: {dist_det_multi}")
     print(f"  Noisy (beta=0.2): {dist_noisy_multi}")
     print(f"  Note: Noisy emission retains probability on non-matching states")
+    
+    # Demo with partial matching
+    print("\n=== Partial Matching Demo ===\n")
+    
+    # Create model with partial matching enabled
+    gdc_partial = GenerativeDenseChain(sequence, alpha=0.8, beta=0.1, partial_match=True)
+    print(f"Partial match: {gdc_partial.partial_match}")
+    print(f"Beta (floor for no match): {gdc_partial.beta}")
+    print(f"States:\n{gdc_partial.states}\n")
+    
+    # Show position-value indices
+    print("Position-value indices (maps value at each position to state indices):")
+    for pos in range(gdc_partial.k):
+        print(f"  Position {pos}: {gdc_partial._position_value_to_indices[pos]}")
+    
+    # Test with an observation that partially matches multiple states
+    print("\nEmission likelihoods for observation [0, 1]:")
+    obs_partial = np.array([0, 1])
+    print(f"  States:  {[list(s) for s in gdc_partial.states]}")
+    print(f"  Matches: [0,0]->1/2, [0,1]->2/2, [1,0]->0/2, [1,1]->1/2")
+    
+    likelihood = gdc_partial._emission_likelihood(obs_partial)
+    print(f"  Likelihoods: {likelihood}")
+    print(f"  Formula: P(obs|state) = (1-beta)*(m/k) + beta/n")
+    print(f"           = 0.9*(m/2) + 0.1/4")
+    
+    # Compare forward pass behavior
+    print("\nForward pass comparison after observing [[0, 1]]:")
+    obs_test = np.array([[0, 1]])
+    
+    # Exact matching (should concentrate on state [0,1] only)
+    dist_exact = gdc.forward_pass(obs_test)
+    print(f"  Exact match (beta=0):    {dist_exact}")
+    
+    # Partial matching (should give some probability to [0,0] and [1,1] too)
+    dist_partial = gdc_partial.forward_pass(obs_test)
+    print(f"  Partial match (beta=0.1): {dist_partial}")
+    
+    # Observation with no exact match
+    print("\nForward pass with observation [[0, 2]] (no exact match in states):")
+    obs_nomatch = np.array([[0, 2]])
+    
+    dist_exact_nomatch = gdc.forward_pass(obs_nomatch)
+    print(f"  Exact match: {dist_exact_nomatch} (falls back to uniform)")
+    
+    dist_partial_nomatch = gdc_partial.forward_pass(obs_nomatch)
+    print(f"  Partial match: {dist_partial_nomatch}")
+    print(f"  (States [0,0] and [0,1] have 1/2 match, [1,0] and [1,1] have 0/2 match)")
+    
+    # Demo with mean_sample
+    print("\n=== Mean Sample (Expected Value) Demo ===\n")
+    
+    # Create a distribution where multiple states have probability
+    print("States:")
+    print(f"  {[list(s) for s in gdc.states]}")
+    
+    # Uniform distribution
+    uniform_dist = np.array([0.25, 0.25, 0.25, 0.25])
+    print(f"\nUniform distribution: {uniform_dist}")
+    mean_uniform = gdc.mean_sample(uniform_dist)
+    print(f"  Mean sample: {mean_uniform}")
+    print(f"  (Expected: 0.25*[0,0] + 0.25*[0,1] + 0.25*[1,0] + 0.25*[1,1] = [0.5, 0.5])")
+    
+    # Weighted distribution
+    weighted_dist = np.array([0.4, 0.3, 0.2, 0.1])
+    print(f"\nWeighted distribution: {weighted_dist}")
+    mean_weighted = gdc.mean_sample(weighted_dist)
+    print(f"  Mean sample: {mean_weighted}")
+    print(f"  (Expected: 0.4*[0,0] + 0.3*[0,1] + 0.2*[1,0] + 0.1*[1,1] = [0.3, 0.4])")
+    
+    # With conditional filtering
+    print("\nMean sample with conditional filtering:")
+    print(f"  States: {[list(s) for s in gdc.states]}")
+    print(f"  Distribution: {uniform_dist}")
+    
+    # Conditional: first element must be 0
+    cond_first_0 = np.array([0, np.nan])
+    mean_cond = gdc.mean_sample(uniform_dist, conditional=cond_first_0)
+    print(f"\n  Conditional [0, nan] (first element must be 0):")
+    print(f"    Matching states: [0,0], [0,1]")
+    print(f"    Mean sample: {mean_cond}")
+    print(f"    (Expected: 0.5*[0,0] + 0.5*[0,1] = [0, 0.5])")
+    
+    # Conditional: second element must be 1
+    cond_second_1 = np.array([np.nan, 1])
+    mean_cond2 = gdc.mean_sample(uniform_dist, conditional=cond_second_1)
+    print(f"\n  Conditional [nan, 1] (second element must be 1):")
+    print(f"    Matching states: [0,1], [1,1]")
+    print(f"    Mean sample: {mean_cond2}")
+    print(f"    (Expected: 0.5*[0,1] + 0.5*[1,1] = [0.5, 1])")
+    
+    # Conditional with no matches (should be ignored)
+    cond_no_match = np.array([5, 5])
+    mean_no_match = gdc.mean_sample(uniform_dist, conditional=cond_no_match)
+    print(f"\n  Conditional [5, 5] (no matches, ignored):")
+    print(f"    Mean sample: {mean_no_match}")
+    print(f"    (Falls back to full distribution: [0.5, 0.5])")

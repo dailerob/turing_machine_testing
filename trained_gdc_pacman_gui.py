@@ -148,9 +148,9 @@ class TrainedGDCPacmanGUI:
             # Rebuild GDC
             gdc = GenerativeDenseChain(
                 sequences=all_histories,
-                alpha=0.6,
+                alpha=0.9,
                 beta=0.1,
-                partial_match=True,
+                partial_match=False,
                 initial_dist='sequence_starts'
             )
         
@@ -178,7 +178,7 @@ class TrainedGDCPacmanGUI:
         # Initialize state distribution for incremental updates (O(n) instead of O(n²))
         state_dist = gdc._get_initial_distribution() if gdc is not None else None
         
-        for step in range(20):
+        for step in range(200):
             obs = game.get_observation()
             obs_flat = obs.flatten()
             
@@ -208,7 +208,7 @@ class TrainedGDCPacmanGUI:
         history = np.array(game_observations, dtype=np.float32)
         
         # Apply reverse EWMA to rewards (smooth from end to start)
-        history[:, 10] = reverse_ewma(history[:, 10], halflife=self.reward_halflife)
+        #history[:, 10] = reverse_ewma(history[:, 10], halflife=self.reward_halflife)
         
         return history
     
@@ -626,9 +626,9 @@ def main():
     print()
     
     gui = TrainedGDCPacmanGUI(
-        n_ghosts=2,
+        n_ghosts=4,
         cell_size=35,
-        n_training_games=1000,
+        n_training_games=2000,
         training_seed=42,
         reward_halflife=1.0
     )

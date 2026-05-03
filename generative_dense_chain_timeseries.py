@@ -44,6 +44,7 @@ class GenerativeDenseChainTimeSeries:
         gamma: float = 0.0,
         transition_type: TransitionType = 'sequential',
         initial_dist: str = 'uniform',
+        terminal_behavior: str = 'diffuse',
         dtype: Optional[np.dtype] = None
     ):
         """
@@ -65,6 +66,16 @@ class GenerativeDenseChainTimeSeries:
 
         if initial_dist not in ('uniform', 'sequence_starts'):
             raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
+
+        if terminal_behavior not in ('diffuse', 'absorb'):
+            raise ValueError(
+                f"terminal_behavior must be 'diffuse' or 'absorb', got '{terminal_behavior}'. "
+                f"'diffuse' (default) redistributes mass at terminal training positions uniformly "
+                f"to non-terminal states (the original GDC-TS behavior). 'absorb' lets that mass "
+                f"leak out of the active state distribution -- equivalent to placing an absorbing "
+                f"sink past each sequence's terminal training position. Forecast predictions in "
+                f"absorb mode should be renormalized over the surviving (non-leaked) mass."
+            )
 
         if transition_type not in ('sequential', 'self_loop', 'self_loop_two_step'):
             raise ValueError(f"transition_type must be 'sequential', 'self_loop', or 'self_loop_two_step', got '{transition_type}'")
@@ -99,6 +110,7 @@ class GenerativeDenseChainTimeSeries:
         self.gamma = gamma
         self.transition_type = transition_type
         self.initial_dist = initial_dist
+        self.terminal_behavior = terminal_behavior
         self._dtype = np.dtype(dtype if dtype is not None else np.float64)
 
         # Precompute log normalizer for univariate N(0, beta): -0.5*log(2*pi*beta); for k dims: -0.5*k*log(2*pi*beta)
@@ -139,8 +151,22 @@ class GenerativeDenseChainTimeSeries:
         """
         Sequential transition with no wrap: factor = (1-alpha)/n, state 0 gets only diffusion.
         Compatible with GDC-style zeroing in forecast_gdc_style.
+
+        When terminal_behavior='absorb', the diffusion source excludes mass at
+        terminal positions (so terminal mass is effectively lost rather than
+        redistributed across non-terminal states).
         """
         n = self.n_states
+        if self.terminal_behavior == 'absorb':
+            # Diffusion sources only from non-terminal positions; mass at
+            # terminals leaks out of the active distribution.
+            non_terminal = dist * (~self.terminal_mask).astype(float)
+            S = non_terminal.sum()
+            factor = (1 - alpha) / n
+            new_dist = np.empty_like(dist)
+            new_dist[0] = 0
+            new_dist[1:n] = factor * S + (alpha - factor) * non_terminal[: n - 1]
+            return new_dist
         factor = (1 - alpha) / n
         S = np.sum(dist)
         new_dist = np.empty_like(dist)
@@ -169,6 +195,11 @@ class GenerativeDenseChainTimeSeries:
         #wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
         nt_diffusion = beta_nt * non_terminal_sum - beta_nt * non_terminal_dist - beta_nt * shifted
         nt_diffusion[0] -= beta_nt * non_terminal_dist[last_nt_idx]
+        if self.terminal_behavior == 'absorb':
+            # Skip t_diffusion: terminal mass is "absorbed" rather than
+            # redistributed.  The mass at terminal still self-loops at theta;
+            # the (1 - theta) fraction leaks out of the active distribution.
+            return self_loop + sequential + nt_diffusion + wrap_to_zero
         t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
         return self_loop + sequential + nt_diffusion + t_diffusion + wrap_to_zero
 
@@ -186,7 +217,10 @@ class GenerativeDenseChainTimeSeries:
         has_two_dist = dist * has_two_mask.astype(float)
         has_two_sum = has_two_dist.sum()
         self_loop = theta * dist
-        t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
+        if self.terminal_behavior == 'absorb':
+            t_diffusion = np.zeros(n)
+        else:
+            t_diffusion = beta_t * terminal_sum - beta_t * terminal_dist
         # No-wrap shifts instead of roll
         if pre_terminal_sum > 0 and n >= 3:
             beta_pre = (1 - theta - alpha) / (n - 2)

@@ -47,6 +47,7 @@ class GenerativeDenseChain:
         beta: float = 0.0,
         transition_type: TransitionType = 'sequential',
         initial_dist: str = 'uniform',
+        terminal_behavior: str = 'diffuse',
         partial_match: bool = False
     ):
         """
@@ -92,6 +93,17 @@ class GenerativeDenseChain:
         """
         if initial_dist not in ('uniform', 'sequence_starts'):
             raise ValueError(f"initial_dist must be 'uniform' or 'sequence_starts', got '{initial_dist}'")
+
+        if terminal_behavior not in ('diffuse', 'absorb'):
+            raise ValueError(
+                f"terminal_behavior must be 'diffuse' or 'absorb', got '{terminal_behavior}'. "
+                f"'diffuse' (default) redistributes mass at sequence-terminal positions "
+                f"uniformly to non-terminal states (the original GDC behavior). "
+                f"'absorb' lets terminal mass leak out of the active distribution -- "
+                f"equivalent to placing an absorbing sink past each sequence's terminal "
+                f"training position. Predictions extracted from the resulting state "
+                f"distribution should be renormalized over the surviving (non-leaked) mass."
+            )
         
         if not 0 <= beta <= 1:
             raise ValueError(f"beta must be in [0, 1], got {beta}")
@@ -130,6 +142,7 @@ class GenerativeDenseChain:
         self.beta = beta
         self.transition_type = transition_type
         self.initial_dist = initial_dist
+        self.terminal_behavior = terminal_behavior
         self.partial_match = partial_match
         
         # Build state index for O(1) emission lookups (exact match)
@@ -218,6 +231,9 @@ class GenerativeDenseChain:
         """
         Sequential transition (no-wrap): alpha to next state, (1-alpha) diffuses uniformly.
         State 0 gets no inflow from the chain; mass that would wrap is added to state 0.
+
+        When terminal_behavior='absorb', terminal mass is not redistributed (the
+        `terminal_prob / n` term is dropped); it leaks out of the active distribution.
         """
         n = self.n_states
         diffuse_rate = (1 - alpha) / (n - 1)
@@ -231,7 +247,15 @@ class GenerativeDenseChain:
         wrap_to_zero = np.zeros(n)
         #wrap_to_zero[0] = (alpha - diffuse_rate) * non_terminal_dist[last_nt_idx]
 
-        new_dist = (alpha - diffuse_rate) * shifted + diffuse_rate * non_terminal_sum + terminal_prob / n + wrap_to_zero
+        if self.terminal_behavior == 'absorb':
+            new_dist = ((alpha - diffuse_rate) * shifted
+                        + diffuse_rate * non_terminal_sum
+                        + wrap_to_zero)
+        else:
+            new_dist = ((alpha - diffuse_rate) * shifted
+                        + diffuse_rate * non_terminal_sum
+                        + terminal_prob / n
+                        + wrap_to_zero)
         return new_dist
     
     def _transition_self_loop(self, dist: np.ndarray, alpha: float, theta: float) -> np.ndarray:
@@ -262,8 +286,12 @@ class GenerativeDenseChain:
         #wrap_to_zero[0] = alpha * non_terminal_dist[last_nt_idx]
         nt_diffusion = diffuse_nt * non_terminal_sum - diffuse_nt * non_terminal_dist - diffuse_nt * shifted
         nt_diffusion[0] -= diffuse_nt * non_terminal_dist[last_nt_idx]
+        if self.terminal_behavior == 'absorb':
+            # Skip t_diffusion: terminal mass is "absorbed" rather than
+            # redistributed.  Terminal mass still self-loops at theta;
+            # the (1 - theta) fraction leaks out of the active distribution.
+            return self_loop + sequential + nt_diffusion + wrap_to_zero
         t_diffusion = diffuse_t * terminal_sum - diffuse_t * terminal_dist
-
         return self_loop + sequential + nt_diffusion + t_diffusion + wrap_to_zero
     
     def _transition_self_loop_two_step(self, dist: np.ndarray, alpha: float, theta: float, gamma: float) -> np.ndarray:
@@ -287,7 +315,10 @@ class GenerativeDenseChain:
         has_two_sum = has_two_dist.sum()
 
         self_loop = theta * dist
-        t_diffusion = diffuse_t * terminal_sum - diffuse_t * terminal_dist
+        if self.terminal_behavior == 'absorb':
+            t_diffusion = np.zeros(n)
+        else:
+            t_diffusion = diffuse_t * terminal_sum - diffuse_t * terminal_dist
 
         if pre_terminal_sum > 0 and n >= 3:
             diffuse_pre = (1 - theta - alpha) / (n - 2)

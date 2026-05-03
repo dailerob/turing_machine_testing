@@ -20,6 +20,19 @@ first set of comparison numbers.
   per-symbol negative log-likelihood (bps) on held-out data
   vs the true-HMM Bayes-optimal bps and the stationary-prior bps.
 
+## Setup
+
+The upstream code is **not committed** here (it's a third-party
+clone). Clone it once into this folder before running anything:
+
+```bash
+cd chmm_tests
+git clone --depth 1 https://github.com/vicariousinc/naturecomm_cscg.git
+```
+
+This populates `chmm_tests/naturecomm_cscg/` with `chmm_actions.py`
+(and the original notebook + LICENSE). The folder is gitignored.
+
 ## Usage
 
 ```bash

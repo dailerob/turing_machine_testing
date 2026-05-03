@@ -83,7 +83,8 @@ class GDCForecaster:
     def __init__(self, nA: int, alpha: float = 0.95, theta: float = 0.0,
                  gamma: float = 0.0, beta: float = 0.02,
                  transition_type: str = 'self_loop',
-                 initial_dist: str = 'sequence_starts'):
+                 initial_dist: str = 'sequence_starts',
+                 terminal_behavior: str = 'diffuse'):
         self.nA = nA
         self.alpha = alpha
         self.theta = theta
@@ -91,6 +92,7 @@ class GDCForecaster:
         self.beta = beta
         self.transition_type = transition_type
         self.initial_dist = initial_dist
+        self.terminal_behavior = terminal_behavior
         self.gdc = None
         self._symbol_of_state = None
 
@@ -102,6 +104,7 @@ class GDCForecaster:
             beta=self.beta,
             transition_type=self.transition_type,
             initial_dist=self.initial_dist,
+            terminal_behavior=self.terminal_behavior,
         )
         # Each GDC hidden state corresponds to exactly one observed scalar.
         self._symbol_of_state = self.gdc.states[:, 0].astype(np.int64)

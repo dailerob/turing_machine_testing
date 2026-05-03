@@ -45,6 +45,51 @@ def uniform_baseline_mse(hmm, test_prefixes, horizons):
     return {h: float(np.mean(v)) for h, v in result.items()}
 
 
+def perplexity_at_horizons(model, hmm, test_prefixes, horizons,
+                           eps=1e-12):
+    """Soft cross-entropy and perplexity, mirroring PAutomaC scoring
+    on predictive distributions instead of full sequences.
+
+    For each (prefix, h) compute
+        CE_h = -Σ_a true_dist[a] · log2 model_dist[a]
+    averaged across prefixes per horizon.  The minimum is the entropy
+    of the true posterior (achieved when model = truth).
+
+    Returns dict {h: {cross_entropy_bits, entropy_floor_bits,
+                       perplexity, entropy_floor_perplexity,
+                       excess_perplexity}}.
+
+    `excess_perplexity` = perplexity / entropy_floor_perplexity,
+    lower bound 1.0; this is the closest analog to PAutomaC's
+    "gap to entropy floor" reported elsewhere.
+    """
+    ce_per_h = {h: [] for h in horizons}
+    floor_per_h = {h: [] for h in horizons}
+    for prefix in test_prefixes:
+        alpha = hmm.filter(prefix)
+        for h in horizons:
+            true_dist = hmm.horizon_emission(alpha, h)
+            pred_dist = model.horizon_emission(prefix, h)
+            pred_safe = np.maximum(pred_dist, eps)
+            true_safe = np.maximum(true_dist, eps)
+            ce = -float(np.sum(true_dist * np.log2(pred_safe)))
+            floor = -float(np.sum(true_dist * np.log2(true_safe)))
+            ce_per_h[h].append(ce)
+            floor_per_h[h].append(floor)
+    out = {}
+    for h in horizons:
+        ce = float(np.mean(ce_per_h[h]))
+        floor = float(np.mean(floor_per_h[h]))
+        out[h] = {
+            'cross_entropy_bits': ce,
+            'entropy_floor_bits': floor,
+            'perplexity': 2.0 ** ce,
+            'entropy_floor_perplexity': 2.0 ** floor,
+            'excess_perplexity': 2.0 ** (ce - floor),
+        }
+    return out
+
+
 def stationary_baseline_mse(hmm, test_prefixes, horizons):
     """MSE of predicting the marginal emission distribution under the
     stationary distribution of T."""

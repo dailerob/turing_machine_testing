@@ -1,7 +1,25 @@
+# Core scientific stack — used by every benchmark
 numpy
-matplotlib
+scipy
 pandas
-statsmodels
+matplotlib
 PyYAML
 python-dotenv
 requests
+scikit-learn
+
+# Statistical baselines (Informer-style ARIMA / Prophet experiments in skolr_bench/forecast/)
+statsmodels
+pmdarima
+prophet
+
+# Forecasting kernels — CPU-side speedups
+numba
+
+# PyTorch (GPU optional). The plain `torch` install gives a CPU-only
+# build; install a CUDA wheel separately if you want the GPU GDC kernel:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu129
+torch
+
+# CHMM / HMM comparison code (only needed if you exercise hmm_comparison/)
+hmmlearn

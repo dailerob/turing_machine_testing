@@ -173,9 +173,41 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Cursor  
-#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to 
+# Cursor
+#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# ----- Project-specific -----
+
+# Claude / agent local state
+.claude/
+
+# Reference papers downloaded for context (sources noted in CLAUDE.md / READMEs)
+*.pdf
+
+# Datasets — re-downloadable per per-folder READMEs
+m4/data/
+skolr_bench/data_skolr/
+skolr_bench/data_original/
+skolr_bench/dataset/
+skolr_bench/datasets.zip
+pautomac/data/
+
+# Generated NLDS trajectories (regenerate with skolr_bench/nlds/nlds_generate.py)
+skolr_bench/nlds/nlds_data/
+*.npz
+
+# Result CSVs (regenerable; writeups carry the headline numbers)
+*_results.csv
+*_sweep.csv
+*_summary.txt
+**/clean_eval_results.csv
+**/baselines_results.csv
+pautomac/results/
+
+# Cloned third-party repos (see per-folder READMEs for clone instructions)
+skolr_bench/Informer2020/
+chmm_tests/naturecomm_cscg/

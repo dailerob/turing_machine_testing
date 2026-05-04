@@ -1,0 +1,31 @@
+% M4 per-frequency OWA — competition winners (context), statistical
+% benchmarks, and our two best GDC val-OWA pick protocols.
+% Drop into a NeurIPS template; requires booktabs.
+%
+% Bold = best per row across {statistical benchmarks + GDC variants}
+% (top-3 winners are listed for context, not in the bolding contest).
+\begin{table*}[t]
+\centering
+\caption{OWA per M4 frequency. \textbf{Bold} = best per row across statistical benchmarks and our GDC variants (M4 top-3 winners listed for reference, not bolded). Lower is better; OWA = 1.000 ties Naive~2.}
+\label{tab:m4_per_frequency}
+\small
+\begin{tabular}{l r | r r r | r r r r r | r r}
+\toprule
+& & \multicolumn{3}{c|}{\emph{Top-3 (reference)}}
+& \multicolumn{5}{c|}{\emph{Statistical benchmarks}}
+& \multicolumn{2}{c}{\emph{GDC (ours)}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-10} \cmidrule(lr){11-12}
+Frequency & $n$
+& Smyl & M.-M. & Pawl.
+& ARIMA & Theta & Comb & ETS & Damped
+& per-series & by-freq \\
+\midrule
+Yearly     & 23{,}000 & 0.778 & 0.799 & 0.820 & 0.892 & 0.872 & 0.867 & 0.903 & 0.890 & 0.814 & \textbf{0.811} \\
+Quarterly  & 24{,}000 & 0.847 & 0.847 & 0.855 & 0.898 & 0.917 & \textbf{0.890} & 0.891 & 0.893 & 0.908 & 0.910 \\
+Monthly    & 48{,}000 & 0.836 & 0.858 & 0.867 & \textbf{0.903} & 0.907 & 0.920 & 0.915 & 0.924 & 0.949 & 0.957 \\
+Weekly     &     359  & 0.851 & 0.796 & 0.766 & 0.932 & 0.971 & 0.926 & 0.931 & 0.917 & \textbf{0.759} & 0.800 \\
+Daily      &  4{,}227 & 1.046 & 1.019 & 0.806 & 1.044 & 0.999 & \textbf{0.978} & 0.996 & 0.997 & 0.985 & 0.987 \\
+Hourly     &     414  & 0.440 & 0.484 & 0.444 & 0.577 & 1.006 & 1.556 & 0.852 & 1.141 & 0.543 & \textbf{0.534} \\
+\bottomrule
+\end{tabular}
+\end{table*}

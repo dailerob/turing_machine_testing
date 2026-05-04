@@ -1,0 +1,35 @@
+% Univariate Exchange forecasting results (Autoformer convention I=96).
+% Drop into a NeurIPS template; requires booktabs, multirow, graphicx, xcolor.
+%
+% Layout matches the ETTm2 main table:
+%   GDC, ARIMA, Prophet are grouped at the front, separated from the
+%   deep-learning baselines by double vertical rules (||).
+%   \textbf{} = best MSE / MAE among {GDC, ARIMA, Prophet} per row.
+%   \textcolor{red}{} = best across ALL methods per row.
+\begin{table*}[t]
+\centering
+\caption{Univariate long-sequence forecasting on Exchange (target=OT, input length $I=96$). MSE / MAE on standardized data; lower is better. \textbf{Bold} = best among \{GDC, ARIMA, Prophet\}; \textcolor{red}{red} = best across all methods, per row. Baselines from Autoformer~\cite{wu2021autoformer} Table 2.}
+\label{tab:exchange_univariate}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{c||cc|cc|cc||cc|cc|cc|cc|cc|cc}
+\toprule
+\multirow{2}{*}{$T$}
+  & \multicolumn{2}{||c|}{\textbf{GDC (ours)}}
+  & \multicolumn{2}{c|}{ARIMA}
+  & \multicolumn{2}{c||}{Prophet}
+  & \multicolumn{2}{c|}{DeepAR}
+  & \multicolumn{2}{c|}{N-BEATS}
+  & \multicolumn{2}{c|}{Reformer}
+  & \multicolumn{2}{c|}{LogTrans}
+  & \multicolumn{2}{c|}{Informer}
+  & \multicolumn{2}{c}{Autoformer} \\
+ & MSE & MAE & MSE & MAE & MSE & MAE & MSE & MAE & MSE & MAE
+   & MSE & MAE & MSE & MAE & MSE & MAE & MSE & MAE \\
+\midrule
+ 96 & \textbf{\textcolor{red}{0.093}} & \textbf{\textcolor{red}{0.223}} & 0.112 & 0.245 & 0.828 & 0.762 & 0.417 & 0.515 & 0.156 & 0.299 & 1.327 & 0.944 & 0.279 & 0.441 & 0.591 & 0.615 & 0.241 & 0.387 \\
+192 & \textbf{\textcolor{red}{0.207}} & \textbf{\textcolor{red}{0.336}} & 0.304 & 0.404 & 0.909 & 0.974 & 0.813 & 0.735 & 0.669 & 0.665 & 1.258 & 0.929 & 1.950 & 1.048 & 1.183 & 0.912 & 0.273 & 0.403 \\
+336 & \textbf{\textcolor{red}{0.442}} & \textbf{\textcolor{red}{0.498}} & 0.736 & 0.598 & 1.304 & 0.988 & 1.331 & 0.962 & 0.611 & 0.605 & 2.179 & 1.296 & 2.438 & 1.262 & 1.367 & 0.984 & 0.508 & 0.539 \\
+720 & \textbf{1.757} & 1.009 & 1.871 & \textbf{0.935} & 3.238 & 1.566 & 1.894 & 1.181 & 1.111 & 0.860 & 2.285 & 1.243 & 2.010 & 1.247 & 1.872 & 1.072 & \textcolor{red}{0.991} & \textcolor{red}{0.768} \\
+\bottomrule
+\end{tabular}}
+\end{table*}

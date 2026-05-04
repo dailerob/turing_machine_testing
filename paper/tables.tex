@@ -1,0 +1,330 @@
+% =============================================================================
+% Paper tables — combined .tex snippets for Overleaf.
+%
+% Drop these into a NeurIPS template. Required packages:
+%   \usepackage{booktabs}    % \toprule, \midrule, \bottomrule, \cmidrule
+%   \usepackage{multirow}    % \multirow in ETTm2 main table
+%   \usepackage{graphicx}    % \resizebox in ETTm2 main table
+%   \usepackage{xcolor}      % \textcolor{red}{...} in ETTm2 main table
+%
+% Each table block can be moved or referenced via its \label.
+% =============================================================================
+
+
+% -----------------------------------------------------------------------------
+% Table 1: combined ETTm2 + Exchange univariate forecasting (Autoformer
+% convention I=96). One row per (Dataset, T, Metric).
+%   GDC | ARIMA | Prophet grouped at the front, separated from the
+%   deep-learning baselines by double vertical rules (||).
+%   \textbf{} = best among {GDC, ARIMA, Prophet} per row.
+%   \textcolor{red}{} = best across ALL methods per row.
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{Univariate long-sequence forecasting on ETTm2 and Exchange (target=OT in both, input length $I=96$, lower is better). \textbf{Bold} = best among \{GDC, ARIMA, Prophet\}; \textcolor{red}{red} = best across all methods, per row. Baselines from Autoformer~\cite{wu2021autoformer} Table 2.}
+\label{tab:univariate_combined}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{c c c||c|c|c||c|c|c|c|c|c}
+\toprule
+Dataset & $T$ & Metric & \textbf{GDC (ours)} & ARIMA & Prophet & DeepAR & N-BEATS & Reformer & LogTrans & Informer & Autoformer \\
+\midrule
+\multirow{8}{*}{ETTm2}
+  & \multirow{2}{*}{96}  & MSE & \textbf{0.074} & 0.211 & 0.287 & 0.099 & 0.082 & 0.108 & 0.075 & 0.088 & \textcolor{red}{0.065} \\
+  &                      & MAE & \textbf{0.196} & 0.362 & 0.456 & 0.237 & 0.219 & 0.244 & 0.208 & 0.225 & \textcolor{red}{0.189} \\
+  & \multirow{2}{*}{192} & MSE & \textbf{\textcolor{red}{0.111}} & 0.261 & 0.312 & 0.154 & 0.120 & 0.175 & 0.129 & 0.132 & 0.118 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.249}} & 0.406 & 0.483 & 0.310 & 0.268 & 0.296 & 0.275 & 0.283 & 0.256 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{\textcolor{red}{0.150}} & 0.317 & 0.331 & 0.277 & 0.226 & 0.396 & 0.154 & 0.180 & 0.154 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.294}} & 0.448 & 0.474 & 0.428 & 0.370 & 0.491 & 0.302 & 0.336 & 0.305 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{0.254} & 0.366 & 0.534 & 0.332 & 0.188 & 0.468 & \textcolor{red}{0.160} & 0.300 & 0.182 \\
+  &                      & MAE & \textbf{0.399} & 0.487 & 0.593 & 0.468 & 0.338 & 0.540 & \textcolor{red}{0.322} & 0.435 & 0.335 \\
+\midrule
+\multirow{8}{*}{Exchange}
+  & \multirow{2}{*}{96}  & MSE & \textbf{\textcolor{red}{0.093}} & 0.112 & 0.828 & 0.417 & 0.156 & 1.327 & 0.279 & 0.591 & 0.241 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.223}} & 0.245 & 0.762 & 0.515 & 0.299 & 0.944 & 0.441 & 0.615 & 0.387 \\
+  & \multirow{2}{*}{192} & MSE & \textbf{\textcolor{red}{0.207}} & 0.304 & 0.909 & 0.813 & 0.669 & 1.258 & 1.950 & 1.183 & 0.273 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.336}} & 0.404 & 0.974 & 0.735 & 0.665 & 0.929 & 1.048 & 0.912 & 0.403 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{\textcolor{red}{0.442}} & 0.736 & 1.304 & 1.331 & 0.611 & 2.179 & 2.438 & 1.367 & 0.508 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.498}} & 0.598 & 0.988 & 0.962 & 0.605 & 1.296 & 1.262 & 0.984 & 0.539 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{1.757} & 1.871 & 3.238 & 1.894 & 1.111 & 2.285 & 2.010 & 1.872 & \textcolor{red}{0.991} \\
+  &                      & MAE & 1.009 & \textbf{0.935} & 1.566 & 1.181 & 0.860 & 1.243 & 1.247 & 1.072 & \textcolor{red}{0.768} \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% Table 2: GDC val-tuned hyperparameter picks per horizon on ETTm2.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{GDC val-tuned configurations for ETTm2 univariate ($I=96$). Recipes: \emph{diff} forecasts 1-step changes and cumsums onto the last observation; \emph{raw} forecasts state values directly. The diff recipe wins through $T=336$; \emph{raw} matching takes over at $T=720$.}
+\label{tab:ettm2_picks}
+\begin{tabular}{c c c c r r r r}
+\toprule
+$T$ & recipe & $\sigma$ & $\alpha$ & val MSE & test MSE & test MAE & runtime (s) \\
+\midrule
+ 96 & diff & 0.10 & 1.00 & 0.102 & 0.074 & 0.196 &  251 \\
+192 & diff & 0.10 & 1.00 & 0.160 & 0.111 & 0.249 &  409 \\
+336 & diff & 0.10 & 1.00 & 0.213 & 0.150 & 0.294 &  621 \\
+720 & raw  & 0.10 & 1.00 & 0.246 & 0.254 & 0.399 & 1099 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 3: GDC val-tuned hyperparameter picks per horizon on Exchange.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{GDC val-tuned configurations for Exchange univariate ($I=96$). Recipes: \emph{diff} forecasts 1-step changes and cumsums onto the last observation; \emph{raw} forecasts state values directly. The diff recipe wins at every horizon; the small $\sigma=0.10$ pick at $T=720$ overfits the validation slice (val MSE $0.137$ vs. test MSE $1.757$).}
+\label{tab:exchange_picks}
+\begin{tabular}{c c c c r r r r}
+\toprule
+$T$ & recipe & $\sigma$ & $\alpha$ & val MSE & test MSE & test MAE & runtime (s) \\
+\midrule
+ 96 & diff & 0.25 & 1.00 & 0.144 & 0.093 & 0.223 &  2.5 \\
+192 & diff & 0.25 & 1.00 & 0.182 & 0.207 & 0.336 &  3.7 \\
+336 & diff & 0.25 & 1.00 & 0.244 & 0.442 & 0.498 &  5.3 \\
+720 & diff & 0.10 & 1.00 & 0.137 & 1.757 & 1.009 &  8.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 4: combined ILI + Traffic + ECL univariate forecasting (Autoformer
+% convention).  No published univariate-OT deep-learning baselines exist
+% for these datasets at horizons {96,192,336,720} (Autoformer/Informer
+% reported multivariate only), so the comparison is against the M4 Naive
+% baselines (Naive 1, Seasonal Naive, Naive 2), ARIMA, and Prophet, all
+% recomputed by us under the same (L, T) protocol as GDC.
+%   \textbf{} = best per row across all six methods (always GDC here).
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{Univariate long-sequence forecasting on ILI, Traffic, and ECL (target=OT, lookback $L$ matches GDC; ILI uses $L=36$ per Autoformer's ILI convention, others $L=96$). MSE / MAE on standardized data; lower is better. \textbf{Bold} = best in row. M4 Naive 1 / Seasonal Naive / Naive 2 follow the M4 supplementary spec~\cite{makridakis2020m4} (frequencies: $m=24$ for hourly Traffic/ECL; $m=1$ for weekly ILI, in which case Seasonal Naive and Naive 2 collapse to Naive 1). ARIMA via \texttt{auto\_arima}, refit per window per Informer~\cite{zhou2021informer} issue \#302. Prophet uses \texttt{growth='flat'} with daily-only seasonality (defaults explode at this lookback). No published univariate-OT deep-learning baselines exist at these horizons.}
+\label{tab:gdc_naive_arima_prophet}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{c c c||c||c|c|c|c|c}
+\toprule
+Dataset & $T$ & Metric & \textbf{GDC (ours)} & Naive 1 & Seasonal Naive & Naive 2 & ARIMA & Prophet (flat) \\
+\midrule
+\multirow{8}{*}{ILI ($m{=}1$, $L{=}36$)}
+  & \multirow{2}{*}{24} & MSE & \textbf{0.830} & 1.427 & 1.427 & 1.427 & 2.243 & 1.138 \\
+  &                     & MAE & \textbf{0.571} & 0.888 & 0.888 & 0.888 & 1.006 & 0.909 \\
+  & \multirow{2}{*}{36} & MSE & \textbf{0.911} & 1.721 & 1.721 & 1.721 & 3.579 & 1.103 \\
+  &                     & MAE & \textbf{0.626} & 1.020 & 1.020 & 1.020 & 1.121 & 0.893 \\
+  & \multirow{2}{*}{48} & MSE & \textbf{0.949} & 1.631 & 1.631 & 1.631 & 5.452 & 1.225 \\
+  &                     & MAE & \textbf{0.671} & 1.005 & 1.005 & 1.005 & 1.164 & 0.946 \\
+  & \multirow{2}{*}{60} & MSE & \textbf{0.793} & 1.363 & 1.363 & 1.363 & 7.982 & 1.446 \\
+  &                     & MAE & \textbf{0.662} & 0.957 & 0.957 & 0.957 & 1.250 & 1.033 \\
+\midrule
+\multirow{8}{*}{Traffic ($m{=}24$, $L{=}96$)}
+  & \multirow{2}{*}{96}  & MSE & \textbf{0.185} & 3.628 & 0.491 & 0.713 & 1.255 & 0.327 \\
+  &                      & MAE & \textbf{0.259} & 1.532 & 0.458 & 0.590 & 0.909 & 0.394 \\
+  & \multirow{2}{*}{192} & MSE & \textbf{0.180} & 3.634 & 0.424 & 0.689 & 1.498 & 0.288 \\
+  &                      & MAE & \textbf{0.254} & 1.531 & 0.406 & 0.578 & 1.014 & 0.365 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{0.176} & 3.594 & 0.427 & 0.688 & 1.657 & 0.278 \\
+  &                      & MAE & \textbf{0.254} & 1.525 & 0.412 & 0.578 & 1.081 & 0.357 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{0.182} & 3.550 & 0.446 & 0.678 & 1.804 & 0.294 \\
+  &                      & MAE & \textbf{0.257} & 1.515 & 0.423 & 0.574 & 1.135 & 0.369 \\
+\midrule
+\multirow{8}{*}{ECL ($m{=}24$, $L{=}96$)}
+  & \multirow{2}{*}{96}  & MSE & \textbf{0.396} & 1.636 & 0.782 & 0.939 & 1.328 & 0.548 \\
+  &                      & MAE & \textbf{0.442} & 0.996 & 0.644 & 0.748 & 0.880 & 0.536 \\
+  & \multirow{2}{*}{192} & MSE & \textbf{0.415} & 1.649 & 0.725 & 0.943 & 1.512 & 0.528 \\
+  &                      & MAE & \textbf{0.457} & 0.998 & 0.611 & 0.746 & 0.920 & 0.527 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{0.461} & 1.739 & 0.794 & 1.025 & 2.087 & 0.560 \\
+  &                      & MAE & \textbf{0.485} & 1.026 & 0.643 & 0.779 & 1.009 & 0.545 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{0.512} & 1.817 & 0.864 & 1.080 & 4.623 & 0.618 \\
+  &                      & MAE & \textbf{0.521} & 1.056 & 0.684 & 0.806 & 1.216 & 0.584 \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% Table 5 (was Table 4): M4 series-weighted total OWA / sMAPE / MASE.
+%   Two GDC variants only.
+%   Bold = best across {GDC variants + statistical benchmarks} per column.
+%   Top-3 winners listed for reference (not in the bolding contest).
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{Series-weighted totals across all 100{,}000 M4 series. OWA $= \tfrac{1}{2}(\text{sMAPE}/\text{sMAPE}_{\text{N2}} + \text{MASE}/\text{MASE}_{\text{N2}})$ where $\text{N2}$ is the official Naive~2 baseline. Lower is better. \textbf{Bold} = best across \{GDC, statistical benchmarks\} per column; published M4 top-3 winners listed for reference. Statistical-benchmark numbers parsed from the M4 supplementary.}
+\label{tab:m4_overall}
+\begin{tabular}{l r r r}
+\toprule
+Method & sMAPE & MASE & OWA \\
+\midrule
+\multicolumn{4}{l}{\emph{M4 competition top-3 (deep-learning ensembles)}} \\
+Smyl (1st place, hybrid ES+RNN)        & 11.375 & 1.536 & 0.833 \\
+Montero-Manso et al. (2nd, FFORMA)     & 11.720 & 1.551 & 0.847 \\
+Pawlikowski et al. (3rd)               & 11.845 & 1.547 & 0.849 \\
+\midrule
+\multicolumn{4}{l}{\emph{GDC (ours)}} \\
+GDC (per-series val-OWA)               & 12.645          & \textbf{1.611} & \textbf{0.887} \\
+GDC (by-freq val-OWA)                  & 12.656          & 1.612          & 0.888 \\
+\midrule
+\multicolumn{4}{l}{\emph{Statistical benchmarks (M4 references)}} \\
+ARIMA                                  & 12.669 & 1.666 & 0.904 \\
+Theta                                  & \textbf{12.309} & 1.697 & 0.906 \\
+Comb (mean of SES/Holt/Damped)         & 12.555 & 1.663 & 0.906 \\
+ETS (standard for comparison)          & 12.725 & 1.680 & 0.910 \\
+Damped exponential smoothing           & 12.661 & 1.683 & 0.913 \\
+SES (Single Exponential Smoothing)     & 13.088 & 1.885 & 0.970 \\
+Holt                                   & 13.774 & 1.772 & 0.973 \\
+Naive 2 (reference)                    & 13.564 & 1.912 & 1.000 \\
+Naive 1 (random walk)                  & 14.208 & 2.043 & 1.073 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 6 (was Table 5): M4 per-frequency OWA — top-3 (reference), statistical benchmarks,
+% and the two GDC val-OWA variants.
+%   Bold = best per row across {statistical + GDC} (top-3 not in contest).
+%   No weighted-total row.
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{OWA per M4 frequency. \textbf{Bold} = best per row across statistical benchmarks and our GDC variants (M4 top-3 winners listed for reference, not bolded). Lower is better; OWA = 1.000 ties Naive~2.}
+\label{tab:m4_per_frequency}
+\small
+\begin{tabular}{l r | r r r | r r r r r | r r}
+\toprule
+& & \multicolumn{3}{c|}{\emph{Top-3 (reference)}}
+& \multicolumn{5}{c|}{\emph{Statistical benchmarks}}
+& \multicolumn{2}{c}{\emph{GDC (ours)}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-10} \cmidrule(lr){11-12}
+Frequency & $n$
+& Smyl & M.-M. & Pawl.
+& ARIMA & Theta & Comb & ETS & Damped
+& per-series & by-freq \\
+\midrule
+Yearly     & 23{,}000 & 0.778 & 0.799 & 0.820 & 0.892 & 0.872 & 0.867 & 0.903 & 0.890 & 0.814 & \textbf{0.811} \\
+Quarterly  & 24{,}000 & 0.847 & 0.847 & 0.855 & 0.898 & 0.917 & \textbf{0.890} & 0.891 & 0.893 & 0.908 & 0.910 \\
+Monthly    & 48{,}000 & 0.836 & 0.858 & 0.867 & \textbf{0.903} & 0.907 & 0.920 & 0.915 & 0.924 & 0.949 & 0.957 \\
+Weekly     &     359  & 0.851 & 0.796 & 0.766 & 0.932 & 0.971 & 0.926 & 0.931 & 0.917 & \textbf{0.759} & 0.800 \\
+Daily      &  4{,}227 & 1.046 & 1.019 & 0.806 & 1.044 & 0.999 & \textbf{0.978} & 0.996 & 0.997 & 0.985 & 0.987 \\
+Hourly     &     414  & 0.440 & 0.484 & 0.444 & 0.577 & 1.006 & 1.556 & 0.852 & 1.141 & 0.543 & \textbf{0.534} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% -----------------------------------------------------------------------------
+% Table 7: HMM forecasting — GDC vs CHMM vs ALERGIA across 6 regimes x 3 N.
+%   Excess perplexity = 2^(CE - floor) where floor = -sum true*log2(true).
+%   Lower = better; lower bound 1.0 (matches the entropy floor).
+%   Configs selected on held-out validation HMMs (seeds 3,4,5);
+%   numbers reported on disjoint test HMMs (seeds 0,1,2).
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{Excess perplexity on synthetic HMM forecasting at horizon $h{=}1$ (averaged over 100 test prefixes of length 20 and 3 random HMMs per regime; lower is better, lower bound $1.000$ at the entropy floor). Excess PP $= 2^{\,\mathrm{CE}-\mathrm{floor}}$ where $\mathrm{floor} = -\sum p^* \log_2 p^*$ with $p^*$ the true posterior predictive. Six regimes covering dense / near-deterministic / sparse transition-emission combinations at two scales. Training set sizes $N \in \{25, 100, 400\}$ sequences. \textbf{Bold} = best in row. \textbf{Leakage-free protocol}: for each (regime, $N$) cell, the GDC config (jointly over a 5-point $(\alpha, \theta, \beta)$ grid, $\mathrm{terminal\_behavior} \in \{\mathrm{diffuse}, \mathrm{absorb}\}$, and $\mathrm{initial\_dist} \in \{\mathrm{uniform}, \mathrm{sequence\_starts}\}$, 20 candidates total) and the CHMM clone count $K \in \{4, 16, 32\}$ are selected by lowest excess PP on three held-out validation HMMs (seeds 3, 4, 5); numbers below are evaluated on three disjoint test HMMs (seeds 0, 1, 2). ALERGIA uses the AALpy default $\epsilon{=}0.05$ (single config, no selection).}
+\label{tab:hmm_forecasting}
+\small
+\begin{tabular}{l r r r r}
+\toprule
+Regime ($n_S$, $n_A$) & $N$ & GDC (ours) & CHMM (val-picked $K$) & ALERGIA \\
+\midrule
+\multirow{3}{*}{dense\_small (10, 4)}
+  &  25 & \textbf{1.0038} & 1.0362 & 1.0054 \\
+  & 100 & 1.0017          & 1.0031 & \textbf{1.0013} \\
+  & 400 & 1.0014          & \textbf{1.0008} & \textbf{1.0008} \\
+\midrule
+\multirow{3}{*}{dense\_large (30, 8)}
+  &  25 & \textbf{1.0044} & 1.7623 & 1.0247 \\
+  & 100 & \textbf{1.0012} & 1.1013 & 1.0055 \\
+  & 400 & \textbf{1.0005} & 1.0100 & 1.0015 \\
+\midrule
+\multirow{3}{*}{det\_small (10, 4)}
+  &  25 & 1.0111          & 1.0387          & \textbf{1.0092} \\
+  & 100 & 1.0107          & 1.0047          & \textbf{1.0044} \\
+  & 400 & 1.0077          & \textbf{1.0012} & 1.0034          \\
+\midrule
+\multirow{3}{*}{det\_large (30, 8)}
+  &  25 & \textbf{1.0100} & 1.7667 & 1.0643 \\
+  & 100 & \textbf{1.0057} & 1.0913 & \textbf{1.0057} \\
+  & 400 & 1.0045          & 1.0112 & \textbf{1.0021} \\
+\midrule
+\multirow{3}{*}{sparse\_small (10, 4)}
+  &  25 & 1.1086 & \textbf{1.0543} & 1.1931 \\
+  & 100 & 1.0862 & \textbf{1.0306} & 1.1159 \\
+  & 400 & 1.0811 & \textbf{1.0226} & 1.1343 \\
+\midrule
+\multirow{3}{*}{sparse\_large (30, 8)}
+  &  25 & \textbf{1.4103} & 1.5656 & 1.6557 \\
+  & 100 & 1.3646          & \textbf{1.2087} & 1.4634 \\
+  & 400 & 1.3171          & \textbf{1.0745} & 1.4234 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% -----------------------------------------------------------------------------
+% Table 8: Algorithmic / Turing-machine benchmarks — STANDARD trace.
+%   Each row reports tuple-level errors (read, write, dir) on held-out
+%   test tapes for GDC tuned, CHMM (best K in {2,4,8}), and ALERGIA at
+%   eps=0.05.  Bold = best in row.  Lower is better; ties ("0/...") shared.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{Algorithmic-trace prediction on the standard TM trace variant. Each task is trained from a small set of program-generated execution traces and evaluated by held-out tape tuple-error count $\big(\frac{\text{wrong (read, write, dir) tuples}}{\text{total prediction positions}}\big)$. \textbf{Bold} = best in row. GDC swept over $\alpha \in \{0.50, 0.70, 0.90, 0.95, 0.99\}$, $\theta \in \{0.005, 0.05\}$, $\mathrm{transition}\in\{\mathrm{self\_loop}, \mathrm{self\_loop\_two\_step}\}$ (the per-task best is reported); CHMM over $K \in \{2, 4, 8\}$; ALERGIA at the AALpy default $\epsilon{=}0.05$.}
+\label{tab:tm_standard}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+Task & Total preds & GDC tuned & CHMM (best $K$) & ALERGIA \\
+\midrule
+parity        & 506    & \textbf{8 / 506} ($\alpha{=}0.50, \theta{=}0.05$, 2-step) & 12 / 506 ($K{=}2$)            & 12 / 506 \\
+increment     & 266    & \textbf{0 / 266} ($\alpha{=}0.50, \theta{=}0.005$, self) & \textbf{0 / 266} ($K{=}2$)    & 3 / 266  \\
+reverse       & 13{,}646 & \textbf{149 / 13{,}646} ($\alpha{=}0.95, \theta{=}0.05$, self) & 329 / 13{,}646 ($K{=}2$) & 601 / 13{,}646 \\
+binary\_adder & 72{,}217 & 59 / 72{,}217 ($\alpha{=}0.50, \theta{=}0.005$, self)  & \textbf{10 / 72{,}217} ($K{=}4$) & 5{,}579 / 72{,}217 \\
+dyck1         & 10{,}920 & 5{,}059 / 10{,}920 ($\alpha{=}0.95, \theta{=}0.05$, self) & \textbf{4{,}497 / 10{,}920} ($K{=}8$) & 5{,}557 / 11{,}120 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 9: Algorithmic / Turing-machine benchmarks — NO-READ trace.
+%   No-read variant: pass-through transitions (where the read symbol is not
+%   used by the machine) are masked with a NO_READ marker so the trace
+%   reflects "what the algorithm is doing" rather than "what tape symbol
+%   the machine is sitting over".  Same models / sweeps as Table 8.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{Algorithmic-trace prediction on the \emph{no-read} TM trace variant: pass-through transitions (where $\mathrm{write}{=}\mathrm{read}$ and the read symbol does not change the machine's action) are masked with a single NO\_READ marker, isolating the algorithm's structural transitions from incidental tape contents. Same evaluation as Table~\ref{tab:tm_standard}; \textbf{bold} = best in row. Dyck-1 has no pass-through transitions and is omitted.}
+\label{tab:tm_noread}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+Task & Total preds & GDC tuned & CHMM (best $K$) & ALERGIA \\
+\midrule
+parity        & 506    & \textbf{8 / 506} ($\alpha{=}0.50, \theta{=}0.05$, 2-step) & 12 / 506 ($K{=}2$) & 12 / 506 \\
+increment     & 266    & \textbf{0 / 266} ($\alpha{=}0.50, \theta{=}0.005$, self) & \textbf{0 / 266} ($K{=}2$) & \textbf{0 / 266} \\
+reverse       & 13{,}646 & \textbf{0 / 13{,}646} ($\alpha{=}0.95, \theta{=}0.05$, self) & 140 / 13{,}646 ($K{=}8$) & 6{,}011 / 13{,}646 \\
+binary\_adder & 72{,}217 & \textbf{0 / 72{,}217} ($\alpha{=}0.90, \theta{=}0.05$, 2-step) & \textbf{0 / 72{,}217} ($K{=}4$) & 1{,}466 / 72{,}217 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Bibliography stub (you'll already have these in your main .bib):
+%
+% @inproceedings{wu2021autoformer,
+%   title     = {Autoformer: Decomposition Transformers with Auto-Correlation
+%                for Long-Term Series Forecasting},
+%   author    = {Wu, Haixu and Xu, Jiehui and Wang, Jianmin and Long, Mingsheng},
+%   booktitle = {Advances in Neural Information Processing Systems},
+%   year      = {2021}
+% }
+% =============================================================================

@@ -1,0 +1,17 @@
+% GDC val-tuned hyperparameter picks per horizon on ETTm2.
+% Drop into a NeurIPS template; requires booktabs.
+\begin{table}[t]
+\centering
+\caption{GDC val-tuned configurations for ETTm2 univariate ($I=96$). Recipes: \emph{diff} forecasts 1-step changes and cumsums onto the last observation; \emph{raw} forecasts state values directly. The diff recipe wins through $T=336$; \emph{raw} matching takes over at $T=720$.}
+\label{tab:ettm2_picks}
+\begin{tabular}{c c c c r r r r}
+\toprule
+$T$ & recipe & $\sigma$ & $\alpha$ & val MSE & test MSE & test MAE & runtime (s) \\
+\midrule
+ 96 & diff & 0.10 & 1.00 & 0.102 & 0.074 & 0.196 &  251 \\
+192 & diff & 0.10 & 1.00 & 0.160 & 0.111 & 0.249 &  409 \\
+336 & diff & 0.10 & 1.00 & 0.213 & 0.150 & 0.294 &  621 \\
+720 & raw  & 0.10 & 1.00 & 0.246 & 0.254 & 0.399 & 1099 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -48,6 +48,11 @@ DATASETS = {
     'ETTm2':   dict(rel='ETT-small/ETTm2.csv', target='OT',
                      train_mo=12, val_mo=4, test_mo=4, hours_per_row=0.25,
                      horizons=[24, 48, 96, 288, 672]),
+    # Autoformer convention: 7:1:2 split for non-ETT datasets.
+    # Exchange has no monthly structure (daily rates) so we use ratio splits
+    # via a special marker (see load_univariate).
+    'Exchange': dict(rel='exchange_rate/exchange_rate.csv', target='OT',
+                     split='ratio_7_1_2', horizons=[96, 192, 336, 720]),
     # ECL informer's loader uses last 4 months as test, prev 3 as val
     'ECL':     dict(rel='electricity/electricity.csv', target='MT_320',
                      train_mo=15, val_mo=3, test_mo=4, hours_per_row=1,
@@ -55,6 +60,17 @@ DATASETS = {
     'Weather': dict(rel='weather/weather.csv', target='wet bulb',
                      train_mo=28, val_mo=10, test_mo=10, hours_per_row=1,
                      horizons=[48, 168, 336, 720]),
+    # Autoformer-convention entries (7:1:2 split, target = last col 'OT',
+    # horizons {96,192,336,720} for hourly datasets, {24,36,48,60} for ILI).
+    'ECL_AF':     dict(rel='electricity/electricity.csv', target='OT',
+                       split='ratio_7_1_2', hours_per_row=1,
+                       horizons=[96, 192, 336, 720]),
+    'Traffic_AF': dict(rel='traffic/traffic.csv', target='OT',
+                       split='ratio_7_1_2', hours_per_row=1,
+                       horizons=[96, 192, 336, 720]),
+    'ILI_AF':     dict(rel='illness/national_illness.csv', target='OT',
+                       split='ratio_7_1_2', hours_per_row=24*7,
+                       horizons=[24, 36, 48, 60]),
 }
 
 
@@ -79,10 +95,15 @@ def load_univariate(name):
             f"First 10 cols: {cols[:10]}. Total cols: {len(cols)}.")
     arr = df[target].values.astype(np.float64)
     n_total = arr.shape[0]
-    rows_per_mo = round(30 * 24 / info['hours_per_row'])
-    n_train = info['train_mo'] * rows_per_mo
-    n_val   = info['val_mo'] * rows_per_mo
-    n_test  = info['test_mo'] * rows_per_mo
+    if info.get('split') == 'ratio_7_1_2':
+        n_train = int(n_total * 0.7)
+        n_test  = int(n_total * 0.2)
+        n_val   = n_total - n_train - n_test
+    else:
+        rows_per_mo = round(30 * 24 / info['hours_per_row'])
+        n_train = info['train_mo'] * rows_per_mo
+        n_val   = info['val_mo'] * rows_per_mo
+        n_test  = info['test_mo'] * rows_per_mo
     end = n_train + n_val + n_test
     if end > n_total:
         # Fall back to ratio split (some datasets have less data than

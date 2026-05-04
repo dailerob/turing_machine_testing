@@ -42,8 +42,10 @@ def fit_predict_one(args):
                         freq=f'{int(60*hours_per_row)}min')
     df = pd.DataFrame({'ds': ts[:L], 'y': lookback})
     try:
-        m = Prophet(daily_seasonality=True, weekly_seasonality=True,
-                    yearly_seasonality=False)
+        # growth='flat' avoids trend extrapolation explosion at short L.
+        # weekly_seasonality off because L=96h=4d cannot constrain a 7d cycle.
+        m = Prophet(daily_seasonality=True, weekly_seasonality=False,
+                    yearly_seasonality=False, growth='flat')
         m.fit(df)
         future = pd.DataFrame({'ds': ts[L:L+T]})
         f = m.predict(future)

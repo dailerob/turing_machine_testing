@@ -1,0 +1,38 @@
+% M4 overall (series-weighted) total OWA, sMAPE, MASE.
+% Drop into a NeurIPS template; requires booktabs.
+%
+% Two GDC variants:
+%   GDC (per-series val-OWA) -- per-series val pick
+%   GDC (by-freq val-OWA)    -- single config per frequency, picked on val
+% Bold = best across {GDC variants + statistical benchmarks} per column
+% (top-3 winners are listed for context but excluded from the bolding contest).
+\begin{table}[t]
+\centering
+\caption{Series-weighted totals across all 100{,}000 M4 series. OWA $= \tfrac{1}{2}(\text{sMAPE}/\text{sMAPE}_{\text{N2}} + \text{MASE}/\text{MASE}_{\text{N2}})$ where $\text{N2}$ is the official Naive~2 baseline. Lower is better. \textbf{Bold} = best across \{GDC, statistical benchmarks\} per column; published M4 top-3 winners listed for reference. Statistical-benchmark numbers parsed from the M4 supplementary.}
+\label{tab:m4_overall}
+\begin{tabular}{l r r r}
+\toprule
+Method & sMAPE & MASE & OWA \\
+\midrule
+\multicolumn{4}{l}{\emph{M4 competition top-3 (deep-learning ensembles)}} \\
+Smyl (1st place, hybrid ES+RNN)        & 11.375 & 1.536 & 0.833 \\
+Montero-Manso et al. (2nd, FFORMA)     & 11.720 & 1.551 & 0.847 \\
+Pawlikowski et al. (3rd)               & 11.845 & 1.547 & 0.849 \\
+\midrule
+\multicolumn{4}{l}{\emph{GDC (ours)}} \\
+GDC (per-series val-OWA)               & 12.645          & \textbf{1.611} & \textbf{0.887} \\
+GDC (by-freq val-OWA)                  & 12.656          & 1.612          & 0.888 \\
+\midrule
+\multicolumn{4}{l}{\emph{Statistical benchmarks (M4 references)}} \\
+ARIMA                                  & 12.669 & 1.666 & 0.904 \\
+Theta                                  & \textbf{12.309} & 1.697 & 0.906 \\
+Comb (mean of SES/Holt/Damped)         & 12.555 & 1.663 & 0.906 \\
+ETS (standard for comparison)          & 12.725 & 1.680 & 0.910 \\
+Damped exponential smoothing           & 12.661 & 1.683 & 0.913 \\
+SES (Single Exponential Smoothing)     & 13.088 & 1.885 & 0.970 \\
+Holt                                   & 13.774 & 1.772 & 0.973 \\
+Naive 2 (reference)                    & 13.564 & 1.912 & 1.000 \\
+Naive 1 (random walk)                  & 14.208 & 2.043 & 1.073 \\
+\bottomrule
+\end{tabular}
+\end{table}

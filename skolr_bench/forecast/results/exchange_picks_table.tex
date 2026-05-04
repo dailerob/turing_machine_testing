@@ -1,0 +1,17 @@
+% GDC val-tuned hyperparameter picks per horizon on Exchange.
+% Drop into a NeurIPS template; requires booktabs.
+\begin{table}[t]
+\centering
+\caption{GDC val-tuned configurations for Exchange univariate ($I=96$). Recipes: \emph{diff} forecasts 1-step changes and cumsums onto the last observation; \emph{raw} forecasts state values directly. The diff recipe wins at every horizon; the small $\sigma=0.10$ pick at $T=720$ overfits the validation slice (val MSE $0.137$ vs. test MSE $1.757$).}
+\label{tab:exchange_picks}
+\begin{tabular}{c c c c r r r r}
+\toprule
+$T$ & recipe & $\sigma$ & $\alpha$ & val MSE & test MSE & test MAE & runtime (s) \\
+\midrule
+ 96 & diff & 0.25 & 1.00 & 0.144 & 0.093 & 0.223 &  2.5 \\
+192 & diff & 0.25 & 1.00 & 0.182 & 0.207 & 0.336 &  3.7 \\
+336 & diff & 0.25 & 1.00 & 0.244 & 0.442 & 0.498 &  5.3 \\
+720 & diff & 0.10 & 1.00 & 0.137 & 1.757 & 1.009 &  8.6 \\
+\bottomrule
+\end{tabular}
+\end{table}

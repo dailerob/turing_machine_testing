@@ -82,14 +82,32 @@ class GDCForecaster:
     """
     def __init__(self, nA: int, alpha: float = 0.95, theta: float = 0.0,
                  gamma: float = 0.0, beta: float = 0.02,
+                 beta_scaling: str = 'none',
                  transition_type: str = 'self_loop',
                  initial_dist: str = 'sequence_starts',
                  terminal_behavior: str = 'diffuse'):
+        """beta_scaling: discrete analog of the continuous GDC √L kernel-
+        bandwidth trick. Per prediction, the effective beta used during the
+        prefix forward pass is rescaled with prefix length L:
+          - 'none'      : beta_eff = beta              (default; standard GDC)
+          - 'linear'    : beta_eff = min(beta * L,    1.0)
+          - 'sqrt'      : beta_eff = min(beta * √L,   1.0)
+          - 'asymptotic': beta_eff = 1 - (1-beta)^L    (smoothly approaches 1)
+        Linear matches the continuous case directly: continuous σ_eff = σ·√L
+        gives variance β_eff = σ²·L = β·L. Asymptotic is the discrete-
+        probability analog of "at least one Bernoulli(β) trial fires in L
+        steps" — never saturates strictly, smooth approach to 1.
+        Forecast (post-prefix) keeps β=0 (delta emission).
+        """
         self.nA = nA
         self.alpha = alpha
         self.theta = theta
         self.gamma = gamma
         self.beta = beta
+        self.beta_scaling = beta_scaling
+        if beta_scaling not in ('none', 'linear', 'sqrt', 'asymptotic'):
+            raise ValueError(f"beta_scaling must be 'none', 'linear', "
+                             f"'sqrt', or 'asymptotic'; got {beta_scaling!r}")
         self.transition_type = transition_type
         self.initial_dist = initial_dist
         self.terminal_behavior = terminal_behavior
@@ -112,7 +130,18 @@ class GDCForecaster:
 
     def horizon_emission(self, prefix_obs, h: int) -> np.ndarray:
         obs = np.asarray(prefix_obs, dtype=np.int64).reshape(-1, 1)
-        final_dist = self.gdc.forward_pass(obs, return_history=False)
+        # Apply L-scaling to beta if requested (analog of continuous √L trick).
+        L = len(obs)
+        if self.beta_scaling == 'linear':
+            beta_eff = min(self.beta * L, 1.0)
+        elif self.beta_scaling == 'sqrt':
+            beta_eff = min(self.beta * float(np.sqrt(L)), 1.0)
+        elif self.beta_scaling == 'asymptotic':
+            beta_eff = 1.0 - (1.0 - self.beta) ** L
+        else:
+            beta_eff = self.beta
+        final_dist = self.gdc.forward_pass(obs, beta=beta_eff,
+                                            return_history=False)
         forecast = self.gdc.forecast(final_dist, n_steps=h)
         # Marginalise out hidden state: sum probability by associated symbol.
         out = np.zeros(self.nA)

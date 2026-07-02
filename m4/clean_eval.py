@@ -77,8 +77,12 @@ def naive_last_pred(train, h):
     return np.full(h, train[-1])
 
 
-def gdc_raw_forecast(train, window_len, sigma_frac, alpha, theta, h):
-    """Hourly recipe: GDC-TS on raw values (no differencing, cycle anchors)."""
+def gdc_raw_forecast(train, window_len, sigma_frac, alpha, theta, h,
+                     alpha_fc=None):
+    """Hourly recipe: GDC-TS on raw values (no differencing, cycle anchors).
+
+    alpha_fc (optional): separate forecast-roll-out alpha (dual-alpha);
+    None reuses alpha (single-alpha)."""
     n = len(train)
     if n < window_len + h + 1:
         return naive_last_pred(train, h)
@@ -92,7 +96,7 @@ def gdc_raw_forecast(train, window_len, sigma_frac, alpha, theta, h):
         terminal_behavior='absorb',
         initial_dist='uniform')
     prime = train[-window_len:].reshape(-1, 1)
-    _, sd = gdc.forecast_gdc_style(prime, n_steps=h)
+    _, sd = gdc.forecast_gdc_style(prime, n_steps=h, alpha_fc=alpha_fc)
     nt_mask = (~gdc.terminal_mask).astype(float)
     sd_nt = sd * nt_mask[None, :]
     sd_sum = sd_nt.sum(axis=1, keepdims=True)
@@ -100,7 +104,8 @@ def gdc_raw_forecast(train, window_len, sigma_frac, alpha, theta, h):
     return ((sd_nt / safe) @ gdc.states)[:, 0]
 
 
-def gdc_diff_forecast(train, window_len, sigma_frac, alpha, theta, h):
+def gdc_diff_forecast(train, window_len, sigma_frac, alpha, theta, h,
+                      alpha_fc=None):
     n = len(train)
     if n < window_len + h + 2:
         return naive_last_pred(train, h)
@@ -190,6 +195,25 @@ CONFIGS_BY_FREQ = {
         ("gdc_L8_s0.50_a0.9",  dict(window_len=8, sigma_frac=0.50, alpha=0.9, theta=0.0)),
     ],
 }
+
+
+# Dual-alpha augmentation (P1): for every GDC config with alpha < 1, add a twin
+# whose forecast roll-out uses alpha_fc = 1.0 (deterministic walk-forward)
+# while the context forward pass keeps alpha. Leakage-free: these are extra
+# candidates the per-series / global val-tuning may or may not select. Gated by
+# the M4_DUAL_ALPHA env var so the disciplined single-alpha grid stays default.
+def _add_dual_alpha_twins(configs_by_freq):
+    for freq, cfgs in configs_by_freq.items():
+        twins = []
+        for name, cfg in cfgs:
+            if cfg is None or cfg.get('alpha', 1.0) >= 1.0:
+                continue
+            twins.append((name + '_afc1.0', dict(cfg, alpha_fc=1.0)))
+        cfgs.extend(twins)
+
+
+if os.environ.get('M4_DUAL_ALPHA', '0') == '1':
+    _add_dual_alpha_twins(CONFIGS_BY_FREQ)
 
 
 def _predict(cfg, train, h, recipe='diff'):

@@ -97,6 +97,9 @@ def horizon_emission_many(
     transition_type: str = 'self_loop',
     terminal_behavior: str = 'diffuse',
     initial_dist: str = 'sequence_starts',
+    beta_scaling: str = 'none',  # 'none' | 'linear' | 'sqrt' | 'asymptotic'
+    alpha_forecast: float = None,  # if set, use during post-prefix forecast
+    theta_forecast: float = None,  # if set, use during post-prefix forecast
     device: str = 'cuda',
     dtype: torch.dtype = torch.float64,
 ):
@@ -160,7 +163,24 @@ def horizon_emission_many(
     V_distinct = int(torch.unique(sym).numel())
     if V_distinct < 1:
         V_distinct = 1
-    inv_V_beta = beta / V_distinct
+    # L-scaling of beta (discrete analog of σ·√L kernel-bandwidth trick).
+    # Computed once per call; the prefix-length-scaled β is applied to
+    # every emission step in the prefix, but NOT to the post-prefix
+    # forecast roll-out (which keeps the original β).
+    if beta_scaling == 'linear':
+        beta_eff = min(beta * L, 1.0)
+    elif beta_scaling == 'sqrt':
+        beta_eff = min(beta * float(math.sqrt(L)), 1.0)
+    elif beta_scaling == 'asymptotic':
+        # 1 - (1-β)^L: probability that at least one Bernoulli(β) trial
+        # fires in L steps. Approaches 1 smoothly without saturating.
+        beta_eff = 1.0 - (1.0 - beta) ** L
+    elif beta_scaling == 'none':
+        beta_eff = beta
+    else:
+        raise ValueError(f"beta_scaling must be 'none', 'linear', "
+                         f"'sqrt', or 'asymptotic'; got {beta_scaling!r}")
+    inv_V_beta = beta_eff / V_distinct
 
     for t_step in range(L):
         if t_step > 0:
@@ -171,7 +191,7 @@ def horizon_emission_many(
         obs = primes_t[:, t_step]                          # (B,) int
         # match indicator: sym[i] == obs[b] -> (B, N)
         match_ind = (sym.unsqueeze(0) == obs.unsqueeze(1)).to(dtype)
-        if beta == 0.0:
+        if beta_eff == 0.0:
             # Deterministic emission: zero non-matching states then renormalize.
             new_dist = dist * match_ind
             ssum = new_dist.sum(dim=1, keepdim=True)
@@ -181,8 +201,8 @@ def horizon_emission_many(
                                     torch.full_like(new_dist, 1.0 / N))
             dist = new_dist
         else:
-            # P(obs|state) = (1-beta)*match + beta/V_distinct
-            emission = (1.0 - beta) * match_ind + inv_V_beta  # (B, N)
+            # P(obs|state) = (1-beta_eff)*match + beta_eff/V_distinct
+            emission = (1.0 - beta_eff) * match_ind + inv_V_beta  # (B, N)
             unnorm = dist * emission
             ssum = unnorm.sum(dim=1, keepdim=True)
             new_dist = torch.where(ssum > 0, unnorm / ssum,
@@ -190,12 +210,19 @@ def horizon_emission_many(
             dist = new_dist
 
     # ---- Forecast to all requested horizons (collecting symbol margins) ----
+    # If forecast (α, θ) overrides are provided, recompute diffusion coeffs
+    # for the forecast roll-out (e.g., α_forecast=1, θ_forecast=0 → pure
+    # deterministic advance with no diffuse smoothing).
+    a_fc = alpha if alpha_forecast is None else alpha_forecast
+    t_fc = theta if theta_forecast is None else theta_forecast
+    beta_nt_fc = (1.0 - a_fc - t_fc) / (N - 2)
+    beta_t_fc  = (1.0 - t_fc) / (N - 1)
     out = torch.empty((B, len(horizons), nA), dtype=dtype, device=device)
     cur = dist
     next_h_idx = 0
     for h in range(1, h_max + 1):
         cur = _self_loop_transition_batched(
-            cur, alpha, theta, beta_nt, beta_t,
+            cur, a_fc, t_fc, beta_nt_fc, beta_t_fc,
             non_terminal_mask, terminal_mask_f, last_nt_idx,
             terminal_behavior)
         if h in horizons_sorted:

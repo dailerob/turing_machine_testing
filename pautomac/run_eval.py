@@ -17,7 +17,7 @@ from data_loader import load_problem, summary  # noqa: E402
 from scoring import pautomac_score  # noqa: E402
 from models import (  # noqa: E402
     UniformModel, UnigramModel, BigramModel, CHMMModel, GDCModel,
-    KneserNey3gramModel)
+    KneserNey3gramModel, ParrotModel, HPYLMModel, PPMModel)
 from baselines import SpectralOOMModel, AlergiaModel  # noqa: E402
 from fast_gdc import BatchedGDCScorer  # noqa: E402
 
@@ -50,6 +50,14 @@ def get_models():
         # Use BatchedGDCScorer for ~3× faster eval on large problems.
         BatchedGDCScorer(alpha=0.95, theta=0.05, transition_type='self_loop'),
         BatchedGDCScorer(alpha=0.50, theta=0.005, transition_type='self_loop'),
+        # Parrot, HPYLM, PPM-D — 2 configs each, matching the GDC
+        # "best-of-fixed-grid" convention.
+        ParrotModel(L=2, K=5, alpha_prior=1.0),
+        ParrotModel(L=4, K=25, alpha_prior=0.1),
+        HPYLMModel(max_depth=3, discount=0.5, concentration=1.0),
+        HPYLMModel(max_depth=5, discount=0.25, concentration=0.5),
+        PPMModel(max_depth=3, discount=0.5),
+        PPMModel(max_depth=5, discount=0.5),
     ]
 
 

@@ -21,32 +21,32 @@
 % -----------------------------------------------------------------------------
 \begin{table*}[t]
 \centering
-\caption{Univariate long-sequence forecasting on ETTm2 and Exchange (target=OT in both, input length $I=96$, lower is better). \textbf{Bold} = best among \{GDC, ARIMA, Prophet\}; \textcolor{red}{red} = best across all methods, per row. Baselines from Autoformer~\cite{wu2021autoformer} Table 2.}
+\caption{Univariate long-sequence forecasting on ETTm2 and Exchange (target=OT in both, input length $I=96$, lower is better). \textbf{Bold} = best among \{GDC, Parrot, ARIMA, Prophet\}; \textcolor{red}{red} = best across all methods, per row. Parrot is the val-tuned context-parroting baseline of \citet{zhang2025parrot} (top-$K$ nearest-prefix lookup, $K \in \{1,5\}$, raw and 1-step-diff variants val-picked per horizon; same train+val state pool as GDC). Other baselines from Autoformer~\cite{wu2021autoformer} Table 2.}
 \label{tab:univariate_combined}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{c c c||c|c|c||c|c|c|c|c|c}
+\begin{tabular}{c c c||c|c|c|c||c|c|c|c|c|c}
 \toprule
-Dataset & $T$ & Metric & \textbf{GDC (ours)} & ARIMA & Prophet & DeepAR & N-BEATS & Reformer & LogTrans & Informer & Autoformer \\
+Dataset & $T$ & Metric & \textbf{GDC (ours)} & Parrot & ARIMA & Prophet & DeepAR & N-BEATS & Reformer & LogTrans & Informer & Autoformer \\
 \midrule
 \multirow{8}{*}{ETTm2}
-  & \multirow{2}{*}{96}  & MSE & \textbf{0.074} & 0.211 & 0.287 & 0.099 & 0.082 & 0.108 & 0.075 & 0.088 & \textcolor{red}{0.065} \\
-  &                      & MAE & \textbf{0.196} & 0.362 & 0.456 & 0.237 & 0.219 & 0.244 & 0.208 & 0.225 & \textcolor{red}{0.189} \\
-  & \multirow{2}{*}{192} & MSE & \textbf{\textcolor{red}{0.111}} & 0.261 & 0.312 & 0.154 & 0.120 & 0.175 & 0.129 & 0.132 & 0.118 \\
-  &                      & MAE & \textbf{\textcolor{red}{0.249}} & 0.406 & 0.483 & 0.310 & 0.268 & 0.296 & 0.275 & 0.283 & 0.256 \\
-  & \multirow{2}{*}{336} & MSE & \textbf{\textcolor{red}{0.150}} & 0.317 & 0.331 & 0.277 & 0.226 & 0.396 & 0.154 & 0.180 & 0.154 \\
-  &                      & MAE & \textbf{\textcolor{red}{0.294}} & 0.448 & 0.474 & 0.428 & 0.370 & 0.491 & 0.302 & 0.336 & 0.305 \\
-  & \multirow{2}{*}{720} & MSE & \textbf{0.254} & 0.366 & 0.534 & 0.332 & 0.188 & 0.468 & \textcolor{red}{0.160} & 0.300 & 0.182 \\
-  &                      & MAE & \textbf{0.399} & 0.487 & 0.593 & 0.468 & 0.338 & 0.540 & \textcolor{red}{0.322} & 0.435 & 0.335 \\
+  & \multirow{2}{*}{96}  & MSE & \textbf{0.074} & 0.092 & 0.211 & 0.287 & 0.099 & 0.082 & 0.108 & 0.075 & 0.088 & \textcolor{red}{0.065} \\
+  &                      & MAE & \textbf{0.196} & 0.217 & 0.362 & 0.456 & 0.237 & 0.219 & 0.244 & 0.208 & 0.225 & \textcolor{red}{0.189} \\
+  & \multirow{2}{*}{192} & MSE & \textbf{\textcolor{red}{0.111}} & 0.134 & 0.261 & 0.312 & 0.154 & 0.120 & 0.175 & 0.129 & 0.132 & 0.118 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.249}} & 0.270 & 0.406 & 0.483 & 0.310 & 0.268 & 0.296 & 0.275 & 0.283 & 0.256 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{\textcolor{red}{0.150}} & 0.185 & 0.317 & 0.331 & 0.277 & 0.226 & 0.396 & 0.154 & 0.180 & 0.154 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.294}} & 0.323 & 0.448 & 0.474 & 0.428 & 0.370 & 0.491 & 0.302 & 0.336 & 0.305 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{0.254} & 0.256 & 0.366 & 0.534 & 0.332 & 0.188 & 0.468 & \textcolor{red}{0.160} & 0.300 & 0.182 \\
+  &                      & MAE & 0.399 & \textbf{0.390} & 0.487 & 0.593 & 0.468 & 0.338 & 0.540 & \textcolor{red}{0.322} & 0.435 & 0.335 \\
 \midrule
 \multirow{8}{*}{Exchange}
-  & \multirow{2}{*}{96}  & MSE & \textbf{\textcolor{red}{0.093}} & 0.112 & 0.828 & 0.417 & 0.156 & 1.327 & 0.279 & 0.591 & 0.241 \\
-  &                      & MAE & \textbf{\textcolor{red}{0.223}} & 0.245 & 0.762 & 0.515 & 0.299 & 0.944 & 0.441 & 0.615 & 0.387 \\
-  & \multirow{2}{*}{192} & MSE & \textbf{\textcolor{red}{0.207}} & 0.304 & 0.909 & 0.813 & 0.669 & 1.258 & 1.950 & 1.183 & 0.273 \\
-  &                      & MAE & \textbf{\textcolor{red}{0.336}} & 0.404 & 0.974 & 0.735 & 0.665 & 0.929 & 1.048 & 0.912 & 0.403 \\
-  & \multirow{2}{*}{336} & MSE & \textbf{\textcolor{red}{0.442}} & 0.736 & 1.304 & 1.331 & 0.611 & 2.179 & 2.438 & 1.367 & 0.508 \\
-  &                      & MAE & \textbf{\textcolor{red}{0.498}} & 0.598 & 0.988 & 0.962 & 0.605 & 1.296 & 1.262 & 0.984 & 0.539 \\
-  & \multirow{2}{*}{720} & MSE & \textbf{1.757} & 1.871 & 3.238 & 1.894 & 1.111 & 2.285 & 2.010 & 1.872 & \textcolor{red}{0.991} \\
-  &                      & MAE & 1.009 & \textbf{0.935} & 1.566 & 1.181 & 0.860 & 1.243 & 1.247 & 1.072 & \textcolor{red}{0.768} \\
+  & \multirow{2}{*}{96}  & MSE & 0.093 & \textbf{\textcolor{red}{0.086}} & 0.112 & 0.828 & 0.417 & 0.156 & 1.327 & 0.279 & 0.591 & 0.241 \\
+  &                      & MAE & 0.223 & \textbf{\textcolor{red}{0.216}} & 0.245 & 0.762 & 0.515 & 0.299 & 0.944 & 0.441 & 0.615 & 0.387 \\
+  & \multirow{2}{*}{192} & MSE & 0.207 & \textbf{\textcolor{red}{0.200}} & 0.304 & 0.909 & 0.813 & 0.669 & 1.258 & 1.950 & 1.183 & 0.273 \\
+  &                      & MAE & 0.336 & \textbf{\textcolor{red}{0.327}} & 0.404 & 0.974 & 0.735 & 0.665 & 0.929 & 1.048 & 0.912 & 0.403 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{\textcolor{red}{0.442}} & 0.458 & 0.736 & 1.304 & 1.331 & 0.611 & 2.179 & 2.438 & 1.367 & 0.508 \\
+  &                      & MAE & \textbf{\textcolor{red}{0.498}} & 0.505 & 0.598 & 0.988 & 0.962 & 0.605 & 1.296 & 1.262 & 0.984 & 0.539 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{1.757} & 2.063 & 1.871 & 3.238 & 1.894 & 1.111 & 2.285 & 2.010 & 1.872 & \textcolor{red}{0.991} \\
+  &                      & MAE & 1.009 & 1.090 & \textbf{0.935} & 1.566 & 1.181 & 0.860 & 1.243 & 1.247 & 1.072 & \textcolor{red}{0.768} \\
 \bottomrule
 \end{tabular}}
 \end{table*}
@@ -103,42 +103,42 @@ $T$ & recipe & $\sigma$ & $\alpha$ & val MSE & test MSE & test MAE & runtime (s)
 % -----------------------------------------------------------------------------
 \begin{table*}[t]
 \centering
-\caption{Univariate long-sequence forecasting on ILI, Traffic, and ECL (target=OT, lookback $L$ matches GDC; ILI uses $L=36$ per Autoformer's ILI convention, others $L=96$). MSE / MAE on standardized data; lower is better. \textbf{Bold} = best in row. M4 Naive 1 / Seasonal Naive / Naive 2 follow the M4 supplementary spec~\cite{makridakis2020m4} (frequencies: $m=24$ for hourly Traffic/ECL; $m=1$ for weekly ILI, in which case Seasonal Naive and Naive 2 collapse to Naive 1). ARIMA via \texttt{auto\_arima}, refit per window per Informer~\cite{zhou2021informer} issue \#302. Prophet uses \texttt{growth='flat'} with daily-only seasonality (defaults explode at this lookback). No published univariate-OT deep-learning baselines exist at these horizons.}
+\caption{Univariate long-sequence forecasting on ILI, Traffic, and ECL (target=OT, lookback $L$ matches GDC; ILI uses $L=36$ per Autoformer's ILI convention, others $L=96$). MSE / MAE on standardized data; lower is better. \textbf{Bold} = best in row. Parrot is the val-tuned context-parroting baseline of \citet{zhang2025parrot} (top-$K$ nearest-prefix lookup, raw and 1-step-diff variants, $K \in \{1,5\}$ val-picked per horizon; same train+val state pool as GDC). M4 Naive 1 / Seasonal Naive / Naive 2 follow the M4 supplementary spec~\cite{makridakis2020m4} (frequencies: $m=24$ for hourly Traffic/ECL; $m=1$ for weekly ILI, in which case Seasonal Naive and Naive 2 collapse to Naive 1). ARIMA via \texttt{auto\_arima}, refit per window per Informer~\cite{zhou2021informer} issue \#302. Prophet uses \texttt{growth='flat'} with daily-only seasonality (defaults explode at this lookback). No published univariate-OT deep-learning baselines exist at these horizons.}
 \label{tab:gdc_naive_arima_prophet}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{c c c||c||c|c|c|c|c}
+\begin{tabular}{c c c||c|c||c|c|c|c|c}
 \toprule
-Dataset & $T$ & Metric & \textbf{GDC (ours)} & Naive 1 & Seasonal Naive & Naive 2 & ARIMA & Prophet (flat) \\
+Dataset & $T$ & Metric & \textbf{GDC (ours)} & Parrot & Naive 1 & Seasonal Naive & Naive 2 & ARIMA & Prophet (flat) \\
 \midrule
 \multirow{8}{*}{ILI ($m{=}1$, $L{=}36$)}
-  & \multirow{2}{*}{24} & MSE & \textbf{0.830} & 1.427 & 1.427 & 1.427 & 2.243 & 1.138 \\
-  &                     & MAE & \textbf{0.571} & 0.888 & 0.888 & 0.888 & 1.006 & 0.909 \\
-  & \multirow{2}{*}{36} & MSE & \textbf{0.911} & 1.721 & 1.721 & 1.721 & 3.579 & 1.103 \\
-  &                     & MAE & \textbf{0.626} & 1.020 & 1.020 & 1.020 & 1.121 & 0.893 \\
-  & \multirow{2}{*}{48} & MSE & \textbf{0.949} & 1.631 & 1.631 & 1.631 & 5.452 & 1.225 \\
-  &                     & MAE & \textbf{0.671} & 1.005 & 1.005 & 1.005 & 1.164 & 0.946 \\
-  & \multirow{2}{*}{60} & MSE & \textbf{0.793} & 1.363 & 1.363 & 1.363 & 7.982 & 1.446 \\
-  &                     & MAE & \textbf{0.662} & 0.957 & 0.957 & 0.957 & 1.250 & 1.033 \\
+  & \multirow{2}{*}{24} & MSE & \textbf{0.830} & 0.867 & 1.427 & 1.427 & 1.427 & 2.243 & 1.138 \\
+  &                     & MAE & 0.571 & \textbf{0.561} & 0.888 & 0.888 & 0.888 & 1.006 & 0.909 \\
+  & \multirow{2}{*}{36} & MSE & \textbf{0.911} & 0.963 & 1.721 & 1.721 & 1.721 & 3.579 & 1.103 \\
+  &                     & MAE & 0.626 & \textbf{0.615} & 1.020 & 1.020 & 1.020 & 1.121 & 0.893 \\
+  & \multirow{2}{*}{48} & MSE & 0.949 & \textbf{0.939} & 1.631 & 1.631 & 1.631 & 5.452 & 1.225 \\
+  &                     & MAE & 0.671 & \textbf{0.633} & 1.005 & 1.005 & 1.005 & 1.164 & 0.946 \\
+  & \multirow{2}{*}{60} & MSE & 0.793 & \textbf{0.656} & 1.363 & 1.363 & 1.363 & 7.982 & 1.446 \\
+  &                     & MAE & 0.662 & \textbf{0.591} & 0.957 & 0.957 & 0.957 & 1.250 & 1.033 \\
 \midrule
 \multirow{8}{*}{Traffic ($m{=}24$, $L{=}96$)}
-  & \multirow{2}{*}{96}  & MSE & \textbf{0.185} & 3.628 & 0.491 & 0.713 & 1.255 & 0.327 \\
-  &                      & MAE & \textbf{0.259} & 1.532 & 0.458 & 0.590 & 0.909 & 0.394 \\
-  & \multirow{2}{*}{192} & MSE & \textbf{0.180} & 3.634 & 0.424 & 0.689 & 1.498 & 0.288 \\
-  &                      & MAE & \textbf{0.254} & 1.531 & 0.406 & 0.578 & 1.014 & 0.365 \\
-  & \multirow{2}{*}{336} & MSE & \textbf{0.176} & 3.594 & 0.427 & 0.688 & 1.657 & 0.278 \\
-  &                      & MAE & \textbf{0.254} & 1.525 & 0.412 & 0.578 & 1.081 & 0.357 \\
-  & \multirow{2}{*}{720} & MSE & \textbf{0.182} & 3.550 & 0.446 & 0.678 & 1.804 & 0.294 \\
-  &                      & MAE & \textbf{0.257} & 1.515 & 0.423 & 0.574 & 1.135 & 0.369 \\
+  & \multirow{2}{*}{96}  & MSE & 0.185 & \textbf{0.182} & 3.628 & 0.491 & 0.713 & 1.255 & 0.327 \\
+  &                      & MAE & 0.259 & \textbf{0.255} & 1.532 & 0.458 & 0.590 & 0.909 & 0.394 \\
+  & \multirow{2}{*}{192} & MSE & \textbf{0.180} & 0.190 & 3.634 & 0.424 & 0.689 & 1.498 & 0.288 \\
+  &                      & MAE & \textbf{0.254} & 0.263 & 1.531 & 0.406 & 0.578 & 1.014 & 0.365 \\
+  & \multirow{2}{*}{336} & MSE & \textbf{0.176} & 0.184 & 3.594 & 0.427 & 0.688 & 1.657 & 0.278 \\
+  &                      & MAE & \textbf{0.254} & 0.262 & 1.525 & 0.412 & 0.578 & 1.081 & 0.357 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{0.182} & 0.210 & 3.550 & 0.446 & 0.678 & 1.804 & 0.294 \\
+  &                      & MAE & \textbf{0.257} & 0.280 & 1.515 & 0.423 & 0.574 & 1.135 & 0.369 \\
 \midrule
 \multirow{8}{*}{ECL ($m{=}24$, $L{=}96$)}
-  & \multirow{2}{*}{96}  & MSE & \textbf{0.396} & 1.636 & 0.782 & 0.939 & 1.328 & 0.548 \\
-  &                      & MAE & \textbf{0.442} & 0.996 & 0.644 & 0.748 & 0.880 & 0.536 \\
-  & \multirow{2}{*}{192} & MSE & \textbf{0.415} & 1.649 & 0.725 & 0.943 & 1.512 & 0.528 \\
-  &                      & MAE & \textbf{0.457} & 0.998 & 0.611 & 0.746 & 0.920 & 0.527 \\
-  & \multirow{2}{*}{336} & MSE & \textbf{0.461} & 1.739 & 0.794 & 1.025 & 2.087 & 0.560 \\
-  &                      & MAE & \textbf{0.485} & 1.026 & 0.643 & 0.779 & 1.009 & 0.545 \\
-  & \multirow{2}{*}{720} & MSE & \textbf{0.512} & 1.817 & 0.864 & 1.080 & 4.623 & 0.618 \\
-  &                      & MAE & \textbf{0.521} & 1.056 & 0.684 & 0.806 & 1.216 & 0.584 \\
+  & \multirow{2}{*}{96}  & MSE & 0.396 & \textbf{0.379} & 1.636 & 0.782 & 0.939 & 1.328 & 0.548 \\
+  &                      & MAE & 0.442 & \textbf{0.438} & 0.996 & 0.644 & 0.748 & 0.880 & 0.536 \\
+  & \multirow{2}{*}{192} & MSE & 0.415 & \textbf{0.401} & 1.649 & 0.725 & 0.943 & 1.512 & 0.528 \\
+  &                      & MAE & 0.457 & \textbf{0.454} & 0.998 & 0.611 & 0.746 & 0.920 & 0.527 \\
+  & \multirow{2}{*}{336} & MSE & 0.461 & \textbf{0.456} & 1.739 & 0.794 & 1.025 & 2.087 & 0.560 \\
+  &                      & MAE & \textbf{0.485} & 0.487 & 1.026 & 0.643 & 0.779 & 1.009 & 0.545 \\
+  & \multirow{2}{*}{720} & MSE & \textbf{0.512} & 0.517 & 1.817 & 0.864 & 1.080 & 4.623 & 0.618 \\
+  &                      & MAE & \textbf{0.521} & 0.526 & 1.056 & 0.684 & 0.806 & 1.216 & 0.584 \\
 \bottomrule
 \end{tabular}}
 \end{table*}
@@ -152,7 +152,7 @@ Dataset & $T$ & Metric & \textbf{GDC (ours)} & Naive 1 & Seasonal Naive & Naive 
 % -----------------------------------------------------------------------------
 \begin{table}[t]
 \centering
-\caption{Series-weighted totals across all 100{,}000 M4 series. OWA $= \tfrac{1}{2}(\text{sMAPE}/\text{sMAPE}_{\text{N2}} + \text{MASE}/\text{MASE}_{\text{N2}})$ where $\text{N2}$ is the official Naive~2 baseline. Lower is better. \textbf{Bold} = best across \{GDC, statistical benchmarks\} per column; published M4 top-3 winners listed for reference. Statistical-benchmark numbers parsed from the M4 supplementary.}
+\caption{Series-weighted totals across all 100{,}000 M4 series. OWA $= \tfrac{1}{2}(\text{sMAPE}/\text{sMAPE}_{\text{N2}} + \text{MASE}/\text{MASE}_{\text{N2}})$ where $\text{N2}$ is the official Naive~2 baseline. Lower is better. \textbf{Bold} = best across \{GDC, parrot, statistical benchmarks\} per column; published M4 top-3 winners listed for reference. Parrot is the val-tuned context-parroting baseline of \citet{zhang2025parrot} (top-$K$ NN over per-series training prefixes, $K\in\{1,5\}$, raw + 1-step-diff variants, $L$ from a per-frequency grid mirroring GDC's). Statistical-benchmark numbers parsed from the M4 supplementary.}
 \label{tab:m4_overall}
 \begin{tabular}{l r r r}
 \toprule
@@ -166,6 +166,10 @@ Pawlikowski et al. (3rd)               & 11.845 & 1.547 & 0.849 \\
 \multicolumn{4}{l}{\emph{GDC (ours)}} \\
 GDC (per-series val-OWA)               & 12.645          & \textbf{1.611} & \textbf{0.887} \\
 GDC (by-freq val-OWA)                  & 12.656          & 1.612          & 0.888 \\
+\midrule
+\multicolumn{4}{l}{\emph{Context parroting baseline (val-tuned)}} \\
+Parrot (per-series val-tune)           & 14.800 & 1.858 & 1.032 \\
+Parrot (by-freq val-OWA)               & 13.582 & 1.673 & 0.938 \\
 \midrule
 \multicolumn{4}{l}{\emph{Statistical benchmarks (M4 references)}} \\
 ARIMA                                  & 12.669 & 1.666 & 0.904 \\
@@ -190,77 +194,90 @@ Naive 1 (random walk)                  & 14.208 & 2.043 & 1.073 \\
 % -----------------------------------------------------------------------------
 \begin{table*}[t]
 \centering
-\caption{OWA per M4 frequency. \textbf{Bold} = best per row across statistical benchmarks and our GDC variants (M4 top-3 winners listed for reference, not bolded). Lower is better; OWA = 1.000 ties Naive~2.}
+\caption{OWA per M4 frequency. \textbf{Bold} = best per row across statistical benchmarks, our GDC variants, and the parrot baseline (M4 top-3 winners listed for reference, not bolded). Lower is better; OWA = 1.000 ties Naive~2. Parrot is the val-tuned context-parroting baseline of \citet{zhang2025parrot}.}
 \label{tab:m4_per_frequency}
 \small
-\begin{tabular}{l r | r r r | r r r r r | r r}
+\begin{tabular}{l r | r r r | r r r r r | r r | r r}
 \toprule
 & & \multicolumn{3}{c|}{\emph{Top-3 (reference)}}
 & \multicolumn{5}{c|}{\emph{Statistical benchmarks}}
-& \multicolumn{2}{c}{\emph{GDC (ours)}} \\
-\cmidrule(lr){3-5} \cmidrule(lr){6-10} \cmidrule(lr){11-12}
+& \multicolumn{2}{c|}{\emph{GDC (ours)}}
+& \multicolumn{2}{c}{\emph{Parrot}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-10} \cmidrule(lr){11-12} \cmidrule(lr){13-14}
 Frequency & $n$
 & Smyl & M.-M. & Pawl.
 & ARIMA & Theta & Comb & ETS & Damped
+& per-series & by-freq
 & per-series & by-freq \\
 \midrule
-Yearly     & 23{,}000 & 0.778 & 0.799 & 0.820 & 0.892 & 0.872 & 0.867 & 0.903 & 0.890 & 0.814 & \textbf{0.811} \\
-Quarterly  & 24{,}000 & 0.847 & 0.847 & 0.855 & 0.898 & 0.917 & \textbf{0.890} & 0.891 & 0.893 & 0.908 & 0.910 \\
-Monthly    & 48{,}000 & 0.836 & 0.858 & 0.867 & \textbf{0.903} & 0.907 & 0.920 & 0.915 & 0.924 & 0.949 & 0.957 \\
-Weekly     &     359  & 0.851 & 0.796 & 0.766 & 0.932 & 0.971 & 0.926 & 0.931 & 0.917 & \textbf{0.759} & 0.800 \\
-Daily      &  4{,}227 & 1.046 & 1.019 & 0.806 & 1.044 & 0.999 & \textbf{0.978} & 0.996 & 0.997 & 0.985 & 0.987 \\
-Hourly     &     414  & 0.440 & 0.484 & 0.444 & 0.577 & 1.006 & 1.556 & 0.852 & 1.141 & 0.543 & \textbf{0.534} \\
+Yearly     & 23{,}000 & 0.778 & 0.799 & 0.820 & 0.892 & 0.872 & 0.867 & 0.903 & 0.890 & 0.814 & \textbf{0.811} & 0.926 & 0.841 \\
+Quarterly  & 24{,}000 & 0.847 & 0.847 & 0.855 & 0.898 & 0.917 & \textbf{0.890} & 0.891 & 0.893 & 0.908 & 0.910 & 1.098 & 0.962 \\
+Monthly    & 48{,}000 & 0.836 & 0.858 & 0.867 & \textbf{0.903} & 0.907 & 0.920 & 0.915 & 0.924 & 0.949 & 0.957 & 1.094 & 1.016 \\
+Weekly     &     359  & 0.851 & 0.796 & 0.766 & 0.932 & 0.971 & 0.926 & 0.931 & 0.917 & \textbf{0.759} & 0.800 & 0.938 & 0.815 \\
+Daily      &  4{,}227 & 1.046 & 1.019 & 0.806 & 1.044 & 0.999 & \textbf{0.978} & 0.996 & 0.997 & 0.985 & 0.987 & 1.244 & 1.073 \\
+Hourly     &     414  & 0.440 & 0.484 & 0.444 & 0.577 & 1.006 & 1.556 & 0.852 & 1.141 & 0.543 & 0.534 & \textbf{0.523} & 0.547 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 
 % -----------------------------------------------------------------------------
-% -----------------------------------------------------------------------------
-% Table 7: HMM forecasting — GDC vs CHMM vs ALERGIA across 6 regimes x 3 N.
-%   Excess perplexity = 2^(CE - floor) where floor = -sum true*log2(true).
-%   Lower = better; lower bound 1.0 (matches the entropy floor).
-%   Configs selected on held-out validation HMMs (seeds 3,4,5);
-%   numbers reported on disjoint test HMMs (seeds 0,1,2).
+% Table 7: HMM forecasting — eight methods on four structured regimes at h=1..5.
+%   Each regime is constructed (random_hmm.py constructors) to expose a specific
+%   structural property: cyclic (deterministic ring), reset_chain (linear chain
+%   with resets), bimodal (two state clusters), sparse (fanout-2 topology).
+%   nS=20, nA=4, N=25, T_len=50, 100 test prefixes of length 20, 20 seeds.
+%   Excess perplexity 2^(CE - floor); lower bound 1.000.
+%   Each method picks its best config per (regime, horizon) over its grid.
 % -----------------------------------------------------------------------------
 \begin{table*}[t]
 \centering
-\caption{Excess perplexity on synthetic HMM forecasting at horizon $h{=}1$ (averaged over 100 test prefixes of length 20 and 3 random HMMs per regime; lower is better, lower bound $1.000$ at the entropy floor). Excess PP $= 2^{\,\mathrm{CE}-\mathrm{floor}}$ where $\mathrm{floor} = -\sum p^* \log_2 p^*$ with $p^*$ the true posterior predictive. Six regimes covering dense / near-deterministic / sparse transition-emission combinations at two scales. Training set sizes $N \in \{25, 100, 400\}$ sequences. \textbf{Bold} = best in row. \textbf{Leakage-free protocol}: for each (regime, $N$) cell, the GDC config (jointly over a 5-point $(\alpha, \theta, \beta)$ grid, $\mathrm{terminal\_behavior} \in \{\mathrm{diffuse}, \mathrm{absorb}\}$, and $\mathrm{initial\_dist} \in \{\mathrm{uniform}, \mathrm{sequence\_starts}\}$, 20 candidates total) and the CHMM clone count $K \in \{4, 16, 32\}$ are selected by lowest excess PP on three held-out validation HMMs (seeds 3, 4, 5); numbers below are evaluated on three disjoint test HMMs (seeds 0, 1, 2). ALERGIA uses the AALpy default $\epsilon{=}0.05$ (single config, no selection).}
+\caption{Excess perplexity on synthetic HMM forecasting at horizons $h \in \{1, \ldots, 5\}$ across four structured regimes. All regimes use $n_S{=}20$ hidden states and $n_A{=}4$ symbols, $N{=}25$ training sequences of length 50 (1{,}250 chars), 100 test prefixes of length 20, and 20 \emph{test} HMMs per regime. Generated by \texttt{hmm\_comparison/gen\_table7\_forecasting.py}. Excess PP $= 2^{\,\mathrm{CE} - \mathrm{floor}}$ where $\mathrm{floor} = -\sum p^* \log_2 p^*$ with $p^*$ the true posterior predictive; lower bound $1.000$ at the entropy floor. \textbf{Bold} = best per column. Selection is leakage-free: each method picks its best config per (regime, horizon) by lowest mean excess PP on a \emph{disjoint} set of 20 validation HMMs (different random draws), and the reported number is the mean over the 20 test HMMs. Freq (unigram-frequency baseline) is reported at $h{=}1$. GDC uses a principled 32-config grid: $\alpha \in \{0.3, 0.5, 0.7, 0.9\}$, $\theta \in \{0, 0.1\}$, $\beta \in \{0, 0.005\}$ asymptotic, with $\alpha_{\mathrm{forecast}} \in \{\alpha, 1.0\}$ (separate forecast operator); $\alpha_{\mathrm{forecast}}{=}1.0$ wins every cell. This grid reproduces a far larger sweep ($\alpha\in10$ values $\times\,\theta\in8\times\beta\in4$, 464 configs) to within $0.004$ excess-PP on every (regime, horizon) cell --- the dropped high-$\alpha$ ($\ge0.8$), high-$\theta$ ($\ge0.2$) and high-$\beta$ ($\ge0.025$) arms are never the validation pick (\texttt{--full} reruns the 464-config sweep). CHMM: $K \in \{4, 8, 16, 32\}$ (50 EM iterations). Parrot is the discrete top-$K$ context-parroting baseline of \citet{zhang2025parrot} with $L \in \{1,2,3,4\}$, $K \in \{25, 50, 100, 200, 500\}$, $\alpha_p \in \{0.1, 1.0\}$. ALERGIA: $\epsilon \in \{0.01, 0.05, 0.1\}$. HPYLM is the fixed-depth Hierarchical Pitman-Yor Language Model approximating the Sequence Memoizer of \citet{wood2009sequencememoizer} with $D \in \{2, 3, 4\}$, $d \in \{0.25, 0.5, 0.75\}$, $c \in \{0.5, 1.0, 5.0\}$. PPM-D is the absolute-discount n-gram backoff model of \citet{howard1993ppmd} with $D \in \{2, 3, 4\}$, $d \in \{0.25, 0.5, 0.75\}$. KN-3 is interpolated Kneser-Ney trigram with $d \in \{0.5, 0.75, 0.9\}$. KN-3 entries marked $\dagger$ flag a wrapper limitation: at long horizons on near-deterministic regimes the trigram assigns ${\sim}0$ probability to symbols that appear at $h{>}1$.}
 \label{tab:hmm_forecasting}
 \small
-\begin{tabular}{l r r r r}
+\begin{tabular}{l r r r r r}
 \toprule
-Regime ($n_S$, $n_A$) & $N$ & GDC (ours) & CHMM (val-picked $K$) & ALERGIA \\
+Method & $h{=}1$ & $h{=}2$ & $h{=}3$ & $h{=}4$ & $h{=}5$ \\
 \midrule
-\multirow{3}{*}{dense\_small (10, 4)}
-  &  25 & \textbf{1.0038} & 1.0362 & 1.0054 \\
-  & 100 & 1.0017          & 1.0031 & \textbf{1.0013} \\
-  & 400 & 1.0014          & \textbf{1.0008} & \textbf{1.0008} \\
+\multicolumn{6}{l}{\emph{(a) cyclic ($\mathrm{advance\_prob}{=}0.95$): deterministic ring, state $i$ emits $i \bmod n_A$}} \\
+Freq    & 2.878          & ---            & ---            & ---            & ---            \\
+ALERGIA & 1.098          & 1.082          & 1.085          & 1.092          & 1.095          \\
+KN-3    & 1.044          & 37.946$^\dagger$ & 42.756$^\dagger$ & 36.684$^\dagger$ & 1.206          \\
+Parrot  & 1.044          & 1.041          & 1.040          & 1.039          & 1.040          \\
+PPM-D   & 1.034          & 1.044          & 1.055          & 1.072          & 1.102          \\
+GDC     & 1.033          & 1.031          & 1.032          & 1.034          & 1.036          \\
+HPYLM   & 1.032          & 1.028          & 1.029          & 1.040          & 1.042          \\
+CHMM    & \textbf{1.027} & \textbf{1.025} & \textbf{1.023} & \textbf{1.022} & \textbf{1.023} \\
 \midrule
-\multirow{3}{*}{dense\_large (30, 8)}
-  &  25 & \textbf{1.0044} & 1.7623 & 1.0247 \\
-  & 100 & \textbf{1.0012} & 1.1013 & 1.0055 \\
-  & 400 & \textbf{1.0005} & 1.0100 & 1.0015 \\
+\multicolumn{6}{l}{\emph{(b) reset\_chain ($\mathrm{advance\_prob}{=}0.90$, $\mathrm{reset\_prob}{=}0.05$): linear chain with periodic resets}} \\
+Freq    & 2.581          & ---            & ---            & ---            & ---            \\
+ALERGIA & 1.074          & 1.057          & 1.052          & 1.050          & 1.049          \\
+Parrot  & 1.042          & 1.037          & 1.032          & 1.027          & 1.024          \\
+KN-3    & 1.035          & 20.721$^\dagger$ & 13.644$^\dagger$ & 17.581$^\dagger$ & 1.370          \\
+HPYLM   & 1.029          & 1.028          & 1.041          & 1.031          & 1.047          \\
+PPM-D   & 1.029          & 1.068          & 1.109          & 1.162          & 1.212          \\
+CHMM    & 1.028          & \textbf{1.022} & \textbf{1.019} & \textbf{1.016} & \textbf{1.015} \\
+GDC     & \textbf{1.026} & 1.026          & 1.021          & 1.018          & 1.019          \\
 \midrule
-\multirow{3}{*}{det\_small (10, 4)}
-  &  25 & 1.0111          & 1.0387          & \textbf{1.0092} \\
-  & 100 & 1.0107          & 1.0047          & \textbf{1.0044} \\
-  & 400 & 1.0077          & \textbf{1.0012} & 1.0034          \\
+\multicolumn{6}{l}{\emph{(c) bimodal ($\mathrm{sticky\_prob}{=}0.95$): two state clusters with disjoint emission supports}} \\
+Freq    & 1.663          & ---            & ---            & ---            & ---            \\
+KN-3    & 1.027          & 1.072          & 1.134          & 1.208          & 1.289          \\
+HPYLM   & 1.021          & 1.012          & 1.023          & 1.025          & 1.021          \\
+ALERGIA & 1.020          & 1.010          & \textbf{1.008} & \textbf{1.008} & \textbf{1.008} \\
+PPM-D   & 1.019          & 1.020          & 1.045          & 1.085          & 1.131          \\
+CHMM    & 1.016          & 1.010          & 1.009          & \textbf{1.008} & \textbf{1.008} \\
+Parrot  & 1.014          & 1.010          & 1.013          & 1.013          & 1.014          \\
+GDC     & \textbf{1.007} & \textbf{1.009} & 1.011          & 1.011          & 1.012          \\
 \midrule
-\multirow{3}{*}{det\_large (30, 8)}
-  &  25 & \textbf{1.0100} & 1.7667 & 1.0643 \\
-  & 100 & \textbf{1.0057} & 1.0913 & \textbf{1.0057} \\
-  & 400 & 1.0045          & 1.0112 & \textbf{1.0021} \\
-\midrule
-\multirow{3}{*}{sparse\_small (10, 4)}
-  &  25 & 1.1086 & \textbf{1.0543} & 1.1931 \\
-  & 100 & 1.0862 & \textbf{1.0306} & 1.1159 \\
-  & 400 & 1.0811 & \textbf{1.0226} & 1.1343 \\
-\midrule
-\multirow{3}{*}{sparse\_large (30, 8)}
-  &  25 & \textbf{1.4103} & 1.5656 & 1.6557 \\
-  & 100 & 1.3646          & \textbf{1.2087} & 1.4634 \\
-  & 400 & 1.3171          & \textbf{1.0745} & 1.4234 \\
+\multicolumn{6}{l}{\emph{(d) sparse topology (fanout=2, $E_{\mathrm{conc}}{=}0.1$): each state's transition supported on 2 random successors}} \\
+Freq    & 1.556          & ---            & ---            & ---            & ---            \\
+ALERGIA & 1.330          & 1.249          & 1.164          & 1.111          & 1.078          \\
+KN-3    & 1.191          & 3.604$^\dagger$ & 1.740$^\dagger$ & 2.588$^\dagger$ & 1.567$^\dagger$ \\
+Parrot  & 1.170          & 1.119          & 1.086          & 1.059          & 1.042          \\
+PPM-D   & 1.161          & 1.240          & 1.262          & 1.295          & 1.308          \\
+GDC     & 1.158          & 1.117          & 1.076          & 1.053          & 1.040          \\
+CHMM    & 1.150          & \textbf{1.096} & \textbf{1.057} & \textbf{1.040} & \textbf{1.027} \\
+HPYLM   & \textbf{1.147} & 1.112          & 1.096          & 1.086          & 1.088          \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -270,25 +287,35 @@ Regime ($n_S$, $n_A$) & $N$ & GDC (ours) & CHMM (val-picked $K$) & ALERGIA \\
 % -----------------------------------------------------------------------------
 % Table 8: Algorithmic / Turing-machine benchmarks — STANDARD trace.
 %   Each row reports tuple-level errors (read, write, dir) on held-out
-%   test tapes for GDC tuned, CHMM (best K in {2,4,8}), and ALERGIA at
-%   eps=0.05.  Bold = best in row.  Lower is better; ties ("0/...") shared.
+%   test tapes for six methods on the leakage-free train/val/test
+%   protocol defined in algorithmic_benchmarks/_tm_task_config.py.
+%   Each method picks its own hyperparams on a stretched val set whose
+%   input range sits between train and test; reported numbers are test
+%   errors for the val-picked config only. n_train = 1200 (800 for
+%   binary_adder), 4x the original training budget.
+%   Bold = best in row.  Lower is better; ties ("0/...") shared.
 % -----------------------------------------------------------------------------
 \begin{table}[t]
 \centering
-\caption{Algorithmic-trace prediction on the standard TM trace variant. Each task is trained from a small set of program-generated execution traces and evaluated by held-out tape tuple-error count $\big(\frac{\text{wrong (read, write, dir) tuples}}{\text{total prediction positions}}\big)$. \textbf{Bold} = best in row. GDC swept over $\alpha \in \{0.50, 0.70, 0.90, 0.95, 0.99\}$, $\theta \in \{0.005, 0.05\}$, $\mathrm{transition}\in\{\mathrm{self\_loop}, \mathrm{self\_loop\_two\_step}\}$ (the per-task best is reported); CHMM over $K \in \{2, 4, 8\}$; ALERGIA at the AALpy default $\epsilon{=}0.05$.}
+\caption{Algorithmic-trace prediction on the standard TM trace variant under a leakage-free protocol. Each task is trained from a set of program-generated execution traces and evaluated by held-out tape tuple-error count $\big(\frac{\text{wrong (read, write, dir) tuples}}{\text{total prediction positions}}\big)$. \textbf{Bold} = best in row. The train, val, and test ranges are defined once per task in \texttt{algorithmic\_benchmarks/\_tm\_task\_config.py}; val is drawn from a stretched range that sits between train and test (may overlap test on length but uses different seeds), so hyperparameters can be picked without using test data. Each method's grid is val-tuned per task and the test number is reported only for the chosen config. Numbers below use $n_{\mathrm{train}}{=}1200$ ($800$ for binary\_adder), 4$\times$ the original training budget. Sweeps: GDC $\alpha \in \{0.50, 0.70, 0.90, 0.95, 0.99\}\times \theta \in \{0.005, 0.05\}$ (self-loop transition, $\beta{=}0$, terminal=diffuse), with a dual-$\alpha$ candidate $\alpha_{\mathrm{fc}}{=}1$ (deterministic-forecast prediction step) for each $\alpha{<}1$; the dual variant is the val-pick on binary\_adder ($59\to3$), subtraction ($1132\to857$), palindrome ($16\to8$) and anbn ($3\to2$), and is identical to single-$\alpha$ elsewhere; CHMM $K \in \{2, 4, 8\}$ (50 EM iters). \textbf{LSTM} is a 2-layer $\times$ 256-hidden flat next-token model (single seed, 60 epochs ADAM lr$=10^{-3}$, $\sim$860k params) trained on the same reduced-tuple-ID sequences GDC sees, with the same conditional-on-next-read masking at evaluation. Parrot is the val-tuned context-parroting baseline of \citet{zhang2025parrot} with $L \in \{1,2,3,4,6,8\}$ and $K \in \{1,5,25\}$. HPYLM is the val-tuned fixed-depth Hierarchical Pitman-Yor Language Model approximating the Sequence Memoizer of \citet{wood2009sequencememoizer} (depth $\in \{3,5,8,12\}$, $d \in \{0.25, 0.5, 0.75\}$, $\alpha \in \{0.5, 1.0\}$). PPM-D is the absolute-discount n-gram backoff model of \citet{howard1993ppmd} with depth $\in \{3,5,8,12\}$ and $d \in \{0.25, 0.5, 0.75\}$. KN-3 is interpolated Kneser-Ney trigram with discount $\in \{0.5, 0.75, 0.9\}$. HPYLM, PPM-D, and KN-3 use the same conditional-on-next-read masking as Parrot. For binary\_adder, test inputs are 1--10$\times$ the digit count seen in training (length-OOD generalization). ALERGIA omitted: its O($n^{2}$ in strings) state-merging is impractical at $n_{\mathrm{train}}{=}1200$. Dyck-1 has no canonical OOD val\_range and is omitted.}
 \label{tab:tm_standard}
 \small
-\begin{tabular}{l c c c c}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c c c c c c}
 \toprule
-Task & Total preds & GDC tuned & CHMM (best $K$) & ALERGIA \\
+Task & Total preds & GDC & LSTM & CHMM & Parrot & HPYLM & PPM-D & KN-3 \\
 \midrule
-parity        & 506    & \textbf{8 / 506} ($\alpha{=}0.50, \theta{=}0.05$, 2-step) & 12 / 506 ($K{=}2$)            & 12 / 506 \\
-increment     & 266    & \textbf{0 / 266} ($\alpha{=}0.50, \theta{=}0.005$, self) & \textbf{0 / 266} ($K{=}2$)    & 3 / 266  \\
-reverse       & 13{,}646 & \textbf{149 / 13{,}646} ($\alpha{=}0.95, \theta{=}0.05$, self) & 329 / 13{,}646 ($K{=}2$) & 601 / 13{,}646 \\
-binary\_adder & 72{,}217 & 59 / 72{,}217 ($\alpha{=}0.50, \theta{=}0.005$, self)  & \textbf{10 / 72{,}217} ($K{=}4$) & 5{,}579 / 72{,}217 \\
-dyck1         & 10{,}920 & 5{,}059 / 10{,}920 ($\alpha{=}0.95, \theta{=}0.05$, self) & \textbf{4{,}497 / 10{,}920} ($K{=}8$) & 5{,}557 / 11{,}120 \\
+parity         & 506      & 11 / 506               & \textbf{9 / 506}      & 10 / 506              & 10 / 506              & \textbf{9 / 506}      & 12 / 506              & 13 / 506              \\
+increment      & 266      & \textbf{0 / 266}       & 2 / 266               & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      \\
+reverse        & 13{,}646 & \textbf{150 / 13{,}646} & 1{,}351 / 13{,}646    & 301 / 13{,}646        & 573 / 13{,}646        & 588 / 13{,}646        & 476 / 13{,}646        & 547 / 13{,}646        \\
+binary\_adder  & 72{,}217 & \textbf{3 / 72{,}217}  & 1{,}012 / 72{,}217    & 10 / 72{,}217         & 381 / 72{,}217        & 375 / 72{,}217        & 178 / 72{,}217        & 2{,}194 / 72{,}217   \\
+shift\_left    & 526      & \textbf{0 / 526}       & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      \\
+bit\_count\_mod3 & 526    & 10 / 526               & \textbf{2 / 526}      & 12 / 526              & 14 / 526              & 13 / 526              & 13 / 526              & 12 / 526              \\
+anbn           & 934      & \textbf{2 / 934}       & 5 / 934               & 4 / 934               & 4 / 934               & 4 / 934               & 4 / 934               & 4 / 934               \\
+palindrome     & 1{,}574  & 8 / 1{,}574            & \textbf{3 / 1{,}574}  & 6 / 1{,}574           & 9 / 1{,}574           & 9 / 1{,}574           & 8 / 1{,}574           & 9 / 1{,}574           \\
+subtraction    & 33{,}433 & \textbf{857 / 33{,}433}& 936 / 33{,}433        & 1{,}572 / 33{,}433    & 1{,}476 / 33{,}433    & 1{,}608 / 33{,}433    & 1{,}608 / 33{,}433    & 1{,}622 / 33{,}433    \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 
@@ -297,21 +324,330 @@ dyck1         & 10{,}920 & 5{,}059 / 10{,}920 ($\alpha{=}0.95, \theta{=}0.05$, s
 %   No-read variant: pass-through transitions (where the read symbol is not
 %   used by the machine) are masked with a NO_READ marker so the trace
 %   reflects "what the algorithm is doing" rather than "what tape symbol
-%   the machine is sitting over".  Same models / sweeps as Table 8.
+%   the machine is sitting over".  Same protocol/models/sweeps as Table 8.
+%   GDC reaches zero on six of nine noread tasks (reverse, binary_adder,
+%   subtraction are the long-OOD state-propagation cells); these are the
+%   headline iteration-mechanism wins. The wins grow with training data:
+%   subtraction-noread was 1/33433 at 1x training, 0/33433 at 4x.
 % -----------------------------------------------------------------------------
 \begin{table}[t]
 \centering
-\caption{Algorithmic-trace prediction on the \emph{no-read} TM trace variant: pass-through transitions (where $\mathrm{write}{=}\mathrm{read}$ and the read symbol does not change the machine's action) are masked with a single NO\_READ marker, isolating the algorithm's structural transitions from incidental tape contents. Same evaluation as Table~\ref{tab:tm_standard}; \textbf{bold} = best in row. Dyck-1 has no pass-through transitions and is omitted.}
+\caption{Algorithmic-trace prediction on the \emph{no-read} TM trace variant: pass-through transitions (where $\mathrm{write}{=}\mathrm{read}$ and the read symbol does not change the machine's action) are masked with a single NO\_READ marker, isolating the algorithm's structural transitions from incidental tape contents. Same leakage-free protocol and 4$\times$ training budget as Table~\ref{tab:tm_standard}; \textbf{bold} = best in row. GDC reaches \textbf{six perfect-zero noread tasks} (increment, reverse, binary\_adder, shift\_left, anbn, subtraction); CHMM reaches five (it ties on each except subtraction). \textbf{LSTM ties on the short-OOD perfect-zero cells} (increment, shift\_left) but fails catastrophically on the long-OOD cells (reverse 2{,}035 errors, binary\_adder 1{,}263, subtraction 2{,}302) where trace lengths extrapolate 6--28$\times$ beyond training and the LSTM hidden state cannot maintain fidelity. Other methods reach at most four perfect-zero cells. Dyck-1 has no pass-through transitions and is omitted. ALERGIA omitted at this scale (see Table~\ref{tab:tm_standard}). Method grids match Table~\ref{tab:tm_standard}.}
 \label{tab:tm_noread}
 \small
-\begin{tabular}{l c c c c}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c c c c c c}
 \toprule
-Task & Total preds & GDC tuned & CHMM (best $K$) & ALERGIA \\
+Task & Total preds & GDC & LSTM & CHMM & Parrot & HPYLM & PPM-D & KN-3 \\
 \midrule
-parity        & 506    & \textbf{8 / 506} ($\alpha{=}0.50, \theta{=}0.05$, 2-step) & 12 / 506 ($K{=}2$) & 12 / 506 \\
-increment     & 266    & \textbf{0 / 266} ($\alpha{=}0.50, \theta{=}0.005$, self) & \textbf{0 / 266} ($K{=}2$) & \textbf{0 / 266} \\
-reverse       & 13{,}646 & \textbf{0 / 13{,}646} ($\alpha{=}0.95, \theta{=}0.05$, self) & 140 / 13{,}646 ($K{=}8$) & 6{,}011 / 13{,}646 \\
-binary\_adder & 72{,}217 & \textbf{0 / 72{,}217} ($\alpha{=}0.90, \theta{=}0.05$, 2-step) & \textbf{0 / 72{,}217} ($K{=}4$) & 1{,}466 / 72{,}217 \\
+parity         & 506      & 11 / 506               & 12 / 506              & 10 / 506              & 10 / 506              & \textbf{9 / 506}      & 12 / 506              & 13 / 506              \\
+increment      & 266      & \textbf{0 / 266}       & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      & \textbf{0 / 266}      \\
+reverse        & 13{,}646 & \textbf{0 / 13{,}646}  & 2{,}035 / 13{,}646    & 121 / 13{,}646        & 349 / 13{,}646        & 313 / 13{,}646        & 313 / 13{,}646        & 415 / 13{,}646        \\
+binary\_adder  & 72{,}217 & \textbf{0 / 72{,}217}  & 1{,}263 / 72{,}217    & \textbf{0 / 72{,}217} & 193 / 72{,}217        & 375 / 72{,}217        & 375 / 72{,}217        & 740 / 72{,}217        \\
+shift\_left    & 526      & \textbf{0 / 526}       & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      & \textbf{0 / 526}      \\
+bit\_count\_mod3 & 526    & \textbf{10 / 526}      & 11 / 526              & 12 / 526              & 14 / 526              & 13 / 526              & 13 / 526              & 12 / 526              \\
+anbn           & 934      & \textbf{0 / 934}       & 9 / 934               & \textbf{0 / 934}      & 9 / 934               & 3 / 934               & 3 / 934               & 3 / 934               \\
+palindrome     & 1{,}574  & 13 / 1{,}574           & 29 / 1{,}574          & 9 / 1{,}574           & \textbf{8 / 1{,}574}  & \textbf{8 / 1{,}574}  & \textbf{8 / 1{,}574}  & 9 / 1{,}574           \\
+subtraction    & 33{,}433 & \textbf{0 / 33{,}433}  & 2{,}302 / 33{,}433    & 966 / 33{,}433        & 1{,}777 / 33{,}433    & 1{,}777 / 33{,}433    & 1{,}558 / 33{,}433    & 1{,}862 / 33{,}433    \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 10: dysts chaotic-systems leaderboard (median sMAPE across 131 systems).
+%   Univariate protocol from Gilpin (2021): pts_per_period=15, periods=12,
+%   30-step forecast horizon, scored on first 29 prediction steps.
+%   Released baseline numbers re-aggregated from dysts_data prediction JSONs.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{Median and mean sMAPE on the dysts chaotic-systems forecasting benchmark of \citet{gilpin2021chaos} (univariate, $\mathrm{pts\_per\_period}=15$, $\mathrm{periods}=12$, 30-step forecast, scored on the first 29 prediction steps per the released protocol). All methods aggregated on the $n=130$-system intersection covered by every method (excludes \texttt{AtmosphericRegime} and \texttt{LidDrivenCavityFlow}, which are not in the released baselines, and \texttt{PiecewiseCircuit}, where pyEDM val-tuning failed). \textbf{Bold} = best per column. (ours) = our val-tuned methods, all four of which share a common \emph{multi-IC val} protocol: per system, val sMAPE is averaged across 3 sliding 90-point fit windows within the train trajectory instead of being scored on a single 150-point fit at the end; this reduces single-trajectory val noise that is otherwise severe under Lyapunov divergence between train and test ICs. Released baseline numbers re-aggregated from the published \texttt{dysts\_data} prediction JSONs; pyEDM (Sugihara lab; Simplex of \citet{sugihara1990simplex} and S-Map of \citet{sugihara1994smap}) is included as the canonical EDM/Takens-embedding baseline, val-tuned per system over Simplex $E\in\{3,5,8\}$ and S-Map $E\in\{3,5\}\times\theta\in\{2,5,10\}$. AnDA (\citet{lguensat2017anda}'s Analog Data Assimilation) is val-tuned over regression $\in$ \{locally\_constant, increment, local\_linear\}, $E\in\{3,5,8\}$, $k\in\{E{+}1,10,25,50\}$. GDC's $\alpha$ grid combines 2 single-$\alpha$ ($\alpha\in\{1.0, 0.99\}$) with 4 dual-$\alpha$ ($\alpha_\text{ctx}\in\{0.8, 0.9, 0.95, 0.99\}$, $\alpha_\text{fc}=1$), crossed with 2 recipes (raw, diff) and 3 $\sigma$ values (\{0.05, 0.10, 0.25\}), giving 36 configs. Median is the standard aggregation in this benchmark family because the per-system distribution is heavy-tailed.}
+\label{tab:dysts_leaderboard}
+\small
+\begin{tabular}{r l r r}
+\toprule
+Rank & Method & Median sMAPE & Mean sMAPE \\
+\midrule
+ 1 & N-BEATS                                 & \textbf{49.21} & \textbf{61.12} \\
+ 2 & pyEDM (ours, multi-IC val-tuned)        & 61.92 & 68.79 \\
+ 3 & RNN                                     & 66.72 & 72.52 \\
+ 4 & GDC (ours, dual-$\alpha$, multi-IC val-tuned) & 67.37 & 72.79 \\
+ 5 & AnDA (ours, full, multi-IC val-tuned)   & 70.46 & 73.96 \\
+ 6 & Parrot (ours, multi-IC val-tuned)       & 74.06 & 77.58 \\
+ 7 & Random Forest                           & 88.15 & 86.13 \\
+ 8 & Transformer                             & 93.39 & 91.97 \\
+ 9 & Linear Regression                       & 104.76 & 99.42 \\
+10 & ARIMA                                   & 110.36 & 99.86 \\
+11 & AutoARIMA                               & 113.79 & 107.84 \\
+12 & FFT                                     & 115.91 & 105.93 \\
+13 & Theta                                   & 120.09 & 108.45 \\
+14 & FourTheta                               & 120.09 & 108.45 \\
+15 & Naive Seasonal                          & 125.64 & 113.96 \\
+16 & Naive Drift                             & 127.56 & 115.11 \\
+17 & TCN                                     & 130.74 & 117.20 \\
+18 & Prophet                                 & 130.46 & 118.45 \\
+19 & Exponential Smoothing                   & 141.67 & 126.25 \\
+20 & Naive Mean                              & 153.25 & 129.57 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 11: dysts Lorenz '63 spot-check.
+%   Same univariate protocol; single-system result that headlines the
+%   "what does the kernel iteration buy you on chaos" question.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{Single-system spot-check on Lorenz~'63 from the dysts benchmark of \citet{gilpin2021chaos} (univariate, $\mathrm{pts\_per\_period}=15$, $\mathrm{periods}=12$). sMAPE on the 29-step forecast horizon. \textbf{Bold} = best (val-tuned, leakage-free). Under our multi-IC val protocol, both GDC and Parrot converge to the diff recipe with $L{=}16$ and $\alpha{=}1$ ($k{=}1$ for Parrot), scoring identically within rounding; pyEDM's val-tuned pick is S-Map with $E{=}3$, $\theta{=}10$. The bracketed footnote shows pyEDM Simplex with a fixed $E{=}5$ (no val-tuning) achieving sMAPE $14.48$ — multi-IC val on the train trajectory now closes most of the gap to this oracle reference for GDC and Parrot.}
+\label{tab:dysts_lorenz}
+\small
+\begin{tabular}{l r}
+\toprule
+Method & sMAPE \\
+\midrule
+\textbf{GDC (ours, diff/$\sigma{=}0.05$/$\alpha{=}1.0$, multi-IC)} & \textbf{16.46} \\
+\textbf{Parrot (ours, diff/$L{=}16$/$k{=}1$, multi-IC)} & \textbf{16.46} \\
+pyEDM (S-Map, $E{=}3$, $\theta{=}10$, multi-IC) & 31.55 \\
+AnDA (local\_linear, $E{=}5$, $k{=}10$, multi-IC) & 68.81 \\
+N-BEATS                            &  76.48 \\
+Random Forest                      &  96.42 \\
+AutoARIMA                          & 115.92 \\
+Prophet                            & 119.29 \\
+ARIMA                              & 119.89 \\
+Transformer                        & 120.75 \\
+Naive Seasonal                     & 122.32 \\
+FourTheta                          & 123.52 \\
+Theta                              & 123.59 \\
+Naive Drift                        & 128.83 \\
+Exponential Smoothing              & 130.24 \\
+TCN                                & 130.29 \\
+Linear Regression                  & 135.70 \\
+RNN                                & 136.02 \\
+Naive Mean                         & 179.86 \\
+FFT                                & 181.24 \\
+\midrule
+\multicolumn{2}{l}{\emph{Reference (not val-tuned, fixed config):}} \\
+pyEDM (Simplex, $E{=}5$, fixed)    & 14.48 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Table 12: Product HMM data-scaling experiment.
+%   3 independent component HMMs, each with nS=3 hidden states and a
+%   ternary alphabet (nA=3); per-component transitions are sampled from
+%   Dirichlet(0.1) (near-deterministic rows), per-component emissions are
+%   state-preferred with E[i, i mod nA] >= 0.7. Components are combined
+%   by Kronecker product into a single product HMM with state space
+%   3^3 = 27 hidden states and product alphabet 3^3 = 27 symbols.
+%   Excess perplexity = 2^(CE - floor) at h=1..5; lower bound 1.000 at the
+%   entropy floor. 3 random seeds; SEQ_LEN=20; 20 test prefixes / seed.
+%   Three training-data scales: N=40, 160, 640 sequences (800 / 3,200 /
+%   12,800 training chars).
+%   Each method's best config per horizon is reported (CHMM K val-picked
+%   from {4, 8, 16, 32, 64, 128} at 4x/16x; {4, 8, 16, 32} at 1x).
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{Excess perplexity on the 3-component ternary product HMM as a function of training-data scale. Three independent component HMMs, each with $n_S{=}3$ hidden states and a ternary alphabet ($n_A{=}3$); per-component transitions drawn from $\mathrm{Dirichlet}(0.1)$ (near-deterministic rows), per-component emissions state-preferred with $E[i,\,i\bmod n_A]\ge 0.7$. Components are combined by Kronecker product into a single product HMM (27 hidden states, alphabet=27 symbols). Excess PP $= 2^{\,\mathrm{CE}-\mathrm{floor}}$ at $h{=}1{,}\ldots{,}5$; lower bound $1.000$ at the entropy floor. 3 test seeds, with leakage-free config selection on 3 disjoint validation seeds; sequences of length 20; 20 test prefixes per seed. Generated by \texttt{hmm\_comparison/gen\_table12\_product\_hmm.py}. \textbf{Bold} = best in column. GDC sweep: a principled 18-config grid $\alpha\in\{0.5{,}0.7{,}0.85\}\times\theta\in\{0.005{,}0.05\}\times\beta\in\{0.05{,}0.075{,}0.15\}$ (single-$\alpha$, asymptotic $\beta$-scaling); the $\beta$ range is raised relative to Table~\ref{tab:hmm_forecasting} because the 27-symbol \emph{stochastic} product-HMM emission needs a higher emission-noise floor (a regime-justified difference --- the full-grid val-picks land at $\beta\in\{0.05{,}0.15\}$). Since the GDC row is a fixed config, grid size does not affect the reported numbers, only the verification that it is near-best (\texttt{GDC\_TABLE12\_FULL=1} reruns the original 462-config sweep). The GDC row is the single \emph{fixed} config $\alpha{=}0.85$, $\theta{=}0.005$, $\beta{=}0.075$ (chosen a priori, applied at every scale --- leakage-free by construction); on validation it is near-best at every scale and exactly the validation-best at $16\times$, while smaller scales prefer $\alpha{=}0.7$ by a small margin. CHMM (best $K$) and Parrot (best $L,K$) are val-picked per horizon on the validation seeds; HPYLM, PPM-D, KN-3 use the fixed depth-3, $d{=}0.5$ configs. CHMM tuned over $K\in\{4{,}8{,}16{,}32\}$ at $1\times$ and $K\in\{4{,}8{,}16{,}32{,}64{,}128\}$ at $4\times{/}16\times$. Parrot tuned over $(L,K)\in\{2{,}4\}\times\{25{,}100\}$. $^\dagger$ KN-3 reuses its single-step prediction at every horizon and blows up at $h \in \{2,4\}$ on this near-deterministic product HMM.}
+\label{tab:product_hmm_scaling}
+\small
+\begin{tabular}{l r r r r r}
+\toprule
+Method & $h{=}1$ & $h{=}2$ & $h{=}3$ & $h{=}4$ & $h{=}5$ \\
+\midrule
+\multicolumn{6}{l}{\emph{(a) $N{=}40$ sequences = 800 training chars (1$\times$)}} \\
+GDC ($\alpha{=}0.85$, $\theta{=}0.005$, $\beta{=}0.075$) & 1.477 & 1.415 & 1.420 & 1.416 & 1.434 \\
+CHMM (best $K$) & 1.984 & 1.553 & \textbf{1.281} & \textbf{1.264} & \textbf{1.240} \\
+Parrot (best $L,K$) & \textbf{1.297} & \textbf{1.325} & 1.366 & 1.368 & 1.358 \\
+Freq (unigram) & 1.615 & --- & --- & --- & --- \\
+HPYLM ($D{=}3$, $d{=}0.5$) & 1.611 & 1.551 & 1.499 & 1.479 & 1.436 \\
+PPM-D ($D{=}3$, $d{=}0.5$) & 1.837 & 1.744 & 1.543 & 1.563 & 1.541 \\
+KN-3 ($d{=}0.5$) & 1.852$^\dagger$ & 3.517$^\dagger$ & 1.888$^\dagger$ & 3.237$^\dagger$ & 1.927$^\dagger$ \\
+\midrule
+\multicolumn{6}{l}{\emph{(b) $N{=}160$ sequences = 3{,}200 training chars (4$\times$)}} \\
+GDC ($\alpha{=}0.85$, $\theta{=}0.005$, $\beta{=}0.075$) & \textbf{1.202} & \textbf{1.197} & \textbf{1.202} & 1.217 & 1.225 \\
+CHMM (best $K$) & 1.607 & 1.249 & 1.209 & \textbf{1.210} & \textbf{1.217} \\
+Parrot (best $L,K$) & 1.243 & 1.287 & 1.312 & 1.335 & 1.324 \\
+Freq (unigram) & 1.462 & --- & --- & --- & --- \\
+HPYLM ($D{=}3$, $d{=}0.5$) & 1.441 & 1.376 & 1.377 & 1.310 & 1.331 \\
+PPM-D ($D{=}3$, $d{=}0.5$) & 1.634 & 1.484 & 1.480 & 1.359 & 1.468 \\
+KN-3 ($d{=}0.5$) & 1.382 & 3.182$^\dagger$ & 1.462 & 2.818$^\dagger$ & 1.517$^\dagger$ \\
+\midrule
+\multicolumn{6}{l}{\emph{(c) $N{=}640$ sequences = 12{,}800 training chars (16$\times$)}} \\
+GDC ($\alpha{=}0.85$, $\theta{=}0.005$, $\beta{=}0.075$) & \textbf{1.183} & 1.192 & 1.208 & 1.209 & 1.217 \\
+CHMM (best $K$) & 1.249 & \textbf{1.181} & \textbf{1.130} & \textbf{1.172} & \textbf{1.179} \\
+Parrot (best $L,K$) & 1.197 & 1.250 & 1.262 & 1.277 & 1.292 \\
+Freq (unigram) & 1.458 & --- & --- & --- & --- \\
+HPYLM ($D{=}3$, $d{=}0.5$) & 1.341 & 1.330 & 1.268 & 1.259 & 1.272 \\
+PPM-D ($D{=}3$, $d{=}0.5$) & 1.394 & 1.385 & 1.288 & 1.286 & 1.303 \\
+KN-3 ($d{=}0.5$) & 1.258 & 3.064$^\dagger$ & 1.338 & 2.683$^\dagger$ & 1.393 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% Table 13: HMM-forecasting data-scaling. Same four structured regimes as
+%   Table 7 (cyclic, reset_chain, bimodal, sparse fanout-2) at horizon h=1 only,
+%   with N (number of training sequences of length 50) varying from 1 to 25.
+%   N=25 column is the canonical 1× scale shared with Table 7. Bold = best per
+%   column. 20 seeds; 100 test prefixes of length 20; same per-method grids
+%   as Table 7. KN-3 omitted at h>1 in this experiment (we report only h=1).
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{Data-scaling on the four structured HMM regimes of Table~\ref{tab:hmm_forecasting} at horizon $h{=}1$. Excess perplexity at $N \in \{1, 3, 5, 10, 25\}$ training sequences, each of length 50 (so 50, 150, 250, 500, and 1{,}250 training chars per HMM, respectively). $N{=}25$ is the canonical scale shared with Table~\ref{tab:hmm_forecasting} (the $N{=}25$ column reproduces that table's $h{=}1$ column exactly). 20 test HMMs, with leakage-free config selection on 20 disjoint validation HMMs; 100 test prefixes of length 20. \textbf{Bold} = best per column. Same per-method grids and generator (\texttt{hmm\_comparison/gen\_table13\_scaling.py}) as Table~\ref{tab:hmm_forecasting}, including the principled 32-config GDC grid. That grid was validated to within $0.004$ at the data-rich $N{=}25$ scale; at the single-sequence $N{=}1$ scale, which this table deliberately probes, it is coarser (the GDC cell shifts up to $\sim0.03$, and cyclic $N{=}1$ tips from a GDC win to a CHMM win by a $0.014$ margin), so GDC takes $14$ of the $20$ column-best cells. $^\ddagger$ The bimodal $N{=}1$ column is degenerate for the methods whose predictions are sharp on a single training sequence (GDC's val-pick selects $\alpha_{\mathrm{forecast}}{=}1$; KN-3 and the Freq unigram have zero counts for the unseen cluster): a single length-50 sample from a sticky ($0.95$) bimodal HMM visits only one of the two clusters, so the other cluster's symbols receive $\sim\!0$ probability and the test perplexity blows up. The smoothing methods (CHMM, ALERGIA, Parrot, HPYLM, PPM-D) stay bounded. From $N{=}3$ onward every method is well-behaved.}
+\label{tab:hmm_scaling}
+\small
+\begin{tabular}{l r r r r r}
+\toprule
+Method & $N{=}1$ & $N{=}3$ & $N{=}5$ & $N{=}10$ & $N{=}25$ \\
+\midrule
+\multicolumn{6}{l}{\emph{(a) cyclic}} \\
+Freq    & 2.890          & 2.885          & 2.882          & 2.879          & 2.878          \\
+KN-3    & 1.133          & 1.147          & 1.119          & 1.081          & 1.044          \\
+PPM-D   & 1.270          & 1.144          & 1.102          & 1.055          & 1.034          \\
+ALERGIA & 2.822          & 2.357          & 1.893          & 1.321          & 1.098          \\
+Parrot  & 1.685          & 1.085          & 1.063          & 1.052          & 1.044          \\
+HPYLM   & 1.158          & 1.096          & 1.075          & 1.047          & 1.032          \\
+GDC     & 1.100          & \textbf{1.061} & \textbf{1.049} & 1.040          & 1.033          \\
+CHMM    & \textbf{1.086} & 1.063          & 1.053          & \textbf{1.038} & \textbf{1.027} \\
+\midrule
+\multicolumn{6}{l}{\emph{(b) reset\_chain}} \\
+Freq    & 2.597          & 2.592          & 2.588          & 2.585          & 2.581          \\
+KN-3    & 1.144          & 1.148          & 1.113          & 1.070          & 1.035          \\
+PPM-D   & 1.275          & 1.134          & 1.091          & 1.050          & 1.029          \\
+ALERGIA & 2.627          & 2.107          & 1.622          & 1.210          & 1.074          \\
+Parrot  & 1.611          & 1.090          & 1.064          & 1.051          & 1.042          \\
+HPYLM   & 1.207          & 1.099          & 1.073          & 1.045          & 1.029          \\
+GDC     & \textbf{1.106} & \textbf{1.058} & \textbf{1.044} & \textbf{1.036} & \textbf{1.026} \\
+CHMM    & 1.117          & 1.065          & 1.054          & 1.038          & 1.028          \\
+\midrule
+\multicolumn{6}{l}{\emph{(c) bimodal}} \\
+Freq    & $\sim7{\times}10^{2}$\,$^\ddagger$ & 1.768          & 1.708          & 1.678          & 1.663          \\
+KN-3    & $\sim1{\times}10^{5}$\,$^\ddagger$ & 1.099          & 1.082          & 1.061          & 1.027          \\
+PPM-D   & 1.367          & 1.148          & 1.108          & 1.062          & 1.019          \\
+ALERGIA & 1.838          & 1.585          & 1.368          & 1.123          & 1.020          \\
+Parrot  & 1.860          & 1.098          & 1.064          & 1.025          & 1.014          \\
+HPYLM   & \textbf{1.323} & 1.115          & 1.079          & 1.049          & 1.021          \\
+GDC     & $\sim1{\times}10^{5}$\,$^\ddagger$ & \textbf{1.050} & \textbf{1.032} & \textbf{1.020} & \textbf{1.007} \\
+CHMM    & 1.343          & 1.149          & 1.095          & 1.040          & 1.016          \\
+\midrule
+\multicolumn{6}{l}{\emph{(d) sparse topology (fanout=2)}} \\
+Freq    & 1.659          & 1.577          & 1.559          & 1.564          & 1.556          \\
+KN-3    & 1.594          & 1.337          & 1.273          & 1.241          & 1.191          \\
+PPM-D   & 1.460          & 1.280          & 1.241          & 1.239          & 1.161          \\
+ALERGIA & 1.983          & 1.787          & 1.573          & 1.414          & 1.330          \\
+Parrot  & 1.450          & 1.311          & 1.263          & 1.216          & 1.170          \\
+HPYLM   & \textbf{1.420} & 1.272          & 1.248          & 1.199          & \textbf{1.147} \\
+GDC     & 1.524          & \textbf{1.265} & \textbf{1.219} & \textbf{1.188} & 1.158          \\
+CHMM    & 1.504          & 1.379          & 1.313          & 1.259          & 1.150          \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% Table 14: PAutomaC competition — per-problem perplexity for GDC dual-α
+%   alongside ALERGIA+ and MDI from Verwer & Hammerschmidt 2022 (FlexFringe),
+%   plus KN-3 and Parrot.
+%   Six methods × 48 problems. Lower perplexity = closer to entropy floor.
+% -----------------------------------------------------------------------------
+\begin{table*}[t]
+\centering
+\caption{Per-problem perplexity on the 48-problem PAutomaC competition (\citet{verwer2014pautomac}). Lower is better; the entropy floor is the optimum if the true distribution were known. \textbf{GDC val-tuned (LF)} selects among 7 GDC configs per problem (2 single-$\alpha$ + 5 dual-$\alpha$ at $\alpha_{\mathrm{fc}}{=}0.9999$, $\alpha_{\mathrm{ctx}} \in \{0.30, 0.50, 0.70, 0.85, 0.95\}$) by lowest held-out negative log-likelihood on a held-out 20\% split of the training sequences --- a leakage-free protocol: the test set and its solution probabilities are never used for selection; the selected config is then refit on full train and scored on test. \textbf{GDC fixed} is the single $\alpha_{\mathrm{ctx}}{=}0.85$, $\alpha_{\mathrm{fc}}{=}0.9999$ config (no per-problem selection at all). \textbf{ALERGIA+} and \textbf{MDI} numbers are from \citet{verwer2022flexfringe} Table 2 (FlexFringe state-merging PDFA learners with sinks, pooling, low-frequency counts; untuned confidence-bound). \textbf{KN-3} is interpolated Kneser-Ney trigram with discount $d{=}0.75$. \textbf{Parrot} is the best of $(L{=}2, K{=}5, \alpha_p{=}1.0)$ and $(L{=}4, K{=}25, \alpha_p{=}0.1)$ context-parroting configs. Summary statistics use the gap above the entropy floor: median over 48 problems, mean, max, and the win count (where the method achieves the lowest perplexity). The leakage-free val-tuning attains a slightly lower median gap than the fixed config (0.73 vs.\ 0.80) but a higher mean (1.85 vs.\ 1.44) and no outright wins --- held-out-NLL selection occasionally mis-picks; both GDC variants rank behind the FlexFringe state-merging learners ALERGIA+ and MDI.}
+\label{tab:pautomac_perplexity}
+\small
+\begin{tabular}{r r r r r r r r}
+\toprule
+P & floor & GDC val-tuned$^{\mathrm{LF}}$ & GDC fixed & ALERGIA+ & MDI & KN-3 & Parrot \\
+\midrule
+ 1 & 29.90  & 31.38           & \textbf{30.52}  & 31.98   & 31.20   & 33.49   & 65.50  \\
+ 2 & 168.33 & 176.24          & 177.91          & \textbf{168.43} & 168.96  & 178.20  & 413.94 \\
+ 3 & 49.96  & 53.65           & 51.47           & 51.35   & \textbf{51.21}  & 68.27   & 98.24  \\
+ 4 & 80.82  & 81.37           & 82.35           & 80.95   & \textbf{80.89}  & 101.38  & 170.67 \\
+ 5 & 33.24  & 33.92           & 34.03           & \textbf{33.24}  & 33.31   & 45.66   & 42.76  \\
+ 6 & 66.99  & 69.95           & 69.95           & \textbf{67.01}  & 67.54   & 110.28  & 147.72 \\
+ 7 & 51.22  & 52.63           & 52.63           & \textbf{51.24}  & 51.46   & 57.32   & 153.11 \\
+ 8 & 81.38  & 84.90           & 82.59           & 83.01   & \textbf{82.05}  & 106.19  & 1087.44 \\
+ 9 & 20.84  & 21.53           & 22.17           & \textbf{20.85}  & 20.99   & 71.63   & 356.49 \\
+10 & 33.30  & 36.10           & 34.39           & \textbf{33.65}  & 35.04   & 45.43   & 102.81 \\
+11 & 31.81  & 33.46           & 33.03           & \textbf{31.84}  & 33.56   & 38.17   & 286.37 \\
+12 & 21.66  & 22.28           & 22.15           & \textbf{21.68}  & 22.49   & 25.25   & 115.60 \\
+13 & 62.81  & 63.54           & 64.83           & 64.76   & \textbf{62.87}  & 158.07  & 238.03 \\
+14 & 116.79 & 119.14          & 120.23          & \textbf{116.84} & 117.13  & 125.84  & 191.08 \\
+15 & 44.24  & 47.07           & 45.96           & \textbf{45.10}  & 46.80   & 48.34   & 112.23 \\
+16 & 30.71  & 31.37           & 31.00           & \textbf{30.72}  & 30.78   & 41.22   & 73.60  \\
+17 & 47.31  & 50.34           & 48.61           & \textbf{48.03}  & 51.13   & 51.91   & 415.21 \\
+18 & 57.33  & 58.01           & 57.87           & \textbf{57.33}  & 57.39   & 65.97   & 113.53 \\
+19 & 17.88  & 18.32           & 18.03           & 17.97   & \textbf{17.92}  & 21.14   & 37.29  \\
+20 & 90.97  & 103.51          & 101.19          & \textbf{92.36}  & 98.61   & 109.08  & 148.49 \\
+21 & 30.52  & 36.49           & 35.63           & \textbf{35.25}  & 37.31   & 46.95   & 239.37 \\
+22 & 25.98  & 26.79           & \textbf{26.22}  & 26.56   & 26.61   & 29.92   & 193.27 \\
+23 & 18.41  & 18.71           & 18.52           & 18.49   & \textbf{18.47}  & 20.82   & 33.06  \\
+24 & 38.73  & 40.09           & 40.09           & \textbf{38.73}  & 38.91   & 48.27   & 90.75  \\
+25 & 65.74  & 73.34           & 70.03           & 67.26   & \textbf{66.83}  & 86.36   & 149.52 \\
+26 & 80.74  & 84.26           & 84.26           & \textbf{80.89}  & 83.52   & 213.23  & 364.23 \\
+27 & 42.43  & 44.32           & 43.70           & \textbf{42.46}  & 43.49   & 46.98   & 259.17 \\
+28 & 52.74  & 58.36           & 54.10           & 53.77   & \textbf{53.55}  & 65.50   & 181.62 \\
+29 & 24.03  & 24.76           & 24.76           & \textbf{24.20}  & 24.58   & 43.98   & 35.21  \\
+30 & 22.93  & 24.16           & 23.46           & 23.47   & \textbf{23.33}  & 25.32   & 47.99  \\
+31 & 41.21  & 42.86           & \textbf{42.01}  & 42.08   & 42.27   & 46.33   & 74.45  \\
+32 & 32.61  & 33.24           & 33.25           & \textbf{32.62}  & 32.65   & 53.04   & 65.81  \\
+33 & 31.87  & 32.49           & 32.75           & \textbf{31.96}  & 32.64   & 34.56   & 75.46  \\
+34 & 19.96  & 21.05           & \textbf{20.99}  & 25.99   & 26.50   & 23.66   & 78.58  \\
+35 & 33.78  & 35.08           & 34.96           & \textbf{33.80}  & 36.81   & 42.87   & 339.33 \\
+36 & 37.99  & 38.64           & \textbf{38.24}  & 38.87   & 38.29   & 39.69   & 52.22  \\
+37 & 20.98  & 21.08           & \textbf{21.03}  & 21.19   & 21.11   & 21.10   & 22.54  \\
+38 & 21.45  & 21.70           & 21.69           & 21.84   & \textbf{21.49}  & 21.70   & 35.10  \\
+39 & 10.00  & 10.19           & 10.13           & \textbf{10.00}  & 10.05   & 10.28   & 15.84  \\
+40 & 8.20   & 8.39            & 8.33            & \textbf{8.26}   & 8.52    & 8.88    & 13.15  \\
+41 & 13.91  & 13.98           & \textbf{13.94}  & 14.02   & 13.98   & 14.01   & 16.03  \\
+42 & 16.00  & 16.32           & 16.19           & \textbf{16.01}  & 16.05   & 16.45   & 29.85  \\
+43 & 32.64  & 32.85           & 32.91           & 33.14   & \textbf{32.85}  & 32.85   & 36.99  \\
+44 & 11.71  & 12.00           & \textbf{11.97}  & 12.70   & 12.04   & 12.09   & 14.64  \\
+45 & 24.04  & 24.22           & 24.42           & \textbf{24.04}  & 24.24   & 24.14   & 32.14  \\
+46 & 11.98  & 12.37           & \textbf{12.32}  & 12.50   & 12.89   & 12.32   & 26.86  \\
+47 & 4.12   & 4.16            & 4.14            & \textbf{4.12}   & 4.13    & 4.68    & 8.49   \\
+48 & 8.04   & 8.32            & 8.33            & \textbf{8.04}   & 8.24    & 8.45    & 14.99  \\
+\midrule
+\multicolumn{8}{l}{\emph{Summary (gap = score $-$ floor, over 48 problems)}} \\
+median gap   & --- & 0.73  & 0.80  & \textbf{0.12} & 0.37  & 4.86   & 50.15 \\
+mean gap     & --- & 1.85  & 1.44  & \textbf{0.63} & 1.09  & 13.27  & 104.10 \\
+max gap      & --- & 12.54 & 10.22 & \textbf{6.04} & 7.64  & 132.49 & 1006.07 \\
+wins (of 48) & --- & 0     & 9     & \textbf{28}   & 11    & 0      & 0    \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+
+% -----------------------------------------------------------------------------
+% Table 14b: PAutomaC breakdown by generative model type.
+%   The 48 problems are 16 DPFA (deterministic), 16 HMM, 16 PFA (non-det),
+%   recovered exactly by classifying each model file's transition structure.
+% -----------------------------------------------------------------------------
+\begin{table}[t]
+\centering
+\caption{PAutomaC gap above the entropy floor broken down by the three generative model types the competition was built from --- deterministic PFA (DPFA), hidden Markov models (HMM), and non-deterministic PFA --- 16 problems each (recovered by classifying each released target machine: DPFA $=$ deterministic transition per (state,symbol); HMM $=$ next-state distribution independent of the emitted symbol; PFA $=$ neither). Each cell gives the median gap across that type's 16 problems with the mean in parentheses; \emph{wins} is the within-type count of problems where the method achieves the lowest perplexity. \textbf{Bold} $=$ best in column. ALERGIA+'s overall lead is concentrated on DPFA, where state-merging recovers the deterministic target almost exactly (15/16 wins, median gap 0.02); 15 of its 28 total wins come from this single type. On non-deterministic PFA the picture is closest: GDC fixed attains the lowest \emph{mean} gap of any method (0.81) and the lowest max (1.72), and ties MDI for second in wins (5).}
+\label{tab:pautomac_by_type}
+\small
+\begin{tabular}{l rr rr rr}
+\toprule
+ & \multicolumn{2}{c}{DPFA (16)} & \multicolumn{2}{c}{HMM (16)} & \multicolumn{2}{c}{PFA (16)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Method & median (mean) & wins & median (mean) & wins & median (mean) & wins \\
+\midrule
+GDC val-tuned$^{\mathrm{LF}}$ & 0.71 (1.14) & 0 & 0.67 (2.93) & 0 & 0.95 (1.47) & 0 \\
+GDC fixed                     & 1.20 (1.15) & 0 & 0.71 (2.36) & 4 & 0.77 (\textbf{0.81}) & 5 \\
+ALERGIA+                      & \textbf{0.02} (\textbf{0.15}) & \textbf{15} & \textbf{0.25} (\textbf{0.85}) & \textbf{7} & \textbf{0.53} (0.91) & \textbf{6} \\
+MDI                           & 0.19 (0.66) & 1 & 0.34 (1.28) & 5 & 0.75 (1.34) & 5 \\
+KN-3                          & 8.87 (24.95) & 0 & 3.43 (7.11) & 0 & 4.02 (7.76) & 0 \\
+Parrot                        & 68.47 (123.0) & 0 & 27.51 (60.17) & 0 & 53.45 (129.1) & 0 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -326,5 +662,83 @@ binary\_adder & 72{,}217 & \textbf{0 / 72{,}217} ($\alpha{=}0.90, \theta{=}0.05$
 %   author    = {Wu, Haixu and Xu, Jiehui and Wang, Jianmin and Long, Mingsheng},
 %   booktitle = {Advances in Neural Information Processing Systems},
 %   year      = {2021}
+% }
+%
+% @article{zhang2025parrot,
+%   title   = {Context Parroting: A Simple But Tough-to-Beat Baseline for
+%              Foundation Models in Scientific Machine Learning},
+%   author  = {Zhang, Yuanzhao and Gilpin, William},
+%   journal = {arXiv preprint arXiv:2505.11349},
+%   year    = {2025}
+% }
+%
+% @inproceedings{gilpin2021chaos,
+%   title     = {Chaos as an Interpretable Benchmark for Forecasting and
+%                Data-Driven Modelling},
+%   author    = {Gilpin, William},
+%   booktitle = {Advances in Neural Information Processing Systems},
+%   year      = {2021}
+% }
+%
+% @article{sugihara1990simplex,
+%   title   = {Nonlinear Forecasting as a Way of Distinguishing Chaos from
+%              Measurement Error in Time Series},
+%   author  = {Sugihara, George and May, Robert M.},
+%   journal = {Nature},
+%   volume  = {344},
+%   pages   = {734--741},
+%   year    = {1990}
+% }
+%
+% @article{sugihara1994smap,
+%   title   = {Nonlinear Forecasting for the Classification of Natural Time
+%              Series},
+%   author  = {Sugihara, George},
+%   journal = {Philosophical Transactions of the Royal Society A},
+%   volume  = {348},
+%   number  = {1688},
+%   pages   = {477--495},
+%   year    = {1994}
+% }
+%
+% @article{khandelwal2020knnlm,
+%   title   = {Generalization through Memorization: Nearest Neighbor Language
+%              Models},
+%   author  = {Khandelwal, Urvashi and Levy, Omer and Jurafsky, Dan and
+%              Zettlemoyer, Luke and Lewis, Mike},
+%   journal = {International Conference on Learning Representations},
+%   year    = {2020}
+% }
+%
+% @article{lguensat2017anda,
+%   title   = {The Analog Data Assimilation},
+%   author  = {Lguensat, Redouane and Tandeo, Pierre and Ailliot, Pierre and
+%              Pulido, Manuel and Fablet, Ronan},
+%   journal = {Monthly Weather Review},
+%   volume  = {145},
+%   number  = {10},
+%   pages   = {4093--4107},
+%   year    = {2017}
+% }
+%
+% @inproceedings{wood2009sequencememoizer,
+%   title     = {A Stochastic Memoizer for Sequence Data},
+%   author    = {Wood, Frank and Archambeau, C{\'e}dric and Gasthaus, Jan and
+%                James, Lancelot and Teh, Yee Whye},
+%   booktitle = {Proceedings of the 26th International Conference on Machine
+%                Learning (ICML)},
+%   pages     = {1129--1136},
+%   year      = {2009}
+% }
+%
+% @article{howard1993ppmd,
+%   title   = {The Design and Analysis of Efficient Lossless Data
+%              Compression Systems},
+%   author  = {Howard, Paul G.},
+%   journal = {PhD Thesis, Brown University},
+%   year    = {1993},
+%   note    = {PPM-D variant; see also Cleary \& Witten, IEEE Trans. Comm.,
+%              1984 for the original PPM, and Witten et al., {\it Managing
+%              Gigabytes}, 1999 for the interpolated form used here.}
 % }
 % =============================================================================

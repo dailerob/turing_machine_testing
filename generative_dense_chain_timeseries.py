@@ -366,6 +366,8 @@ class GenerativeDenseChainTimeSeries:
         theta: Optional[float] = None,
         gamma: Optional[float] = None,
         transition_type: Optional[TransitionType] = None,
+        alpha_fc: Optional[float] = None,
+        theta_fc: Optional[float] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         GDC-style forecast: forward pass, zero last state, then propagate with
@@ -380,6 +382,12 @@ class GenerativeDenseChainTimeSeries:
             Forecast horizon.
         alpha, theta, gamma, transition_type
             Optional overrides; default use instance values.
+        alpha_fc, theta_fc
+            Optional dual-alpha overrides applied ONLY to the forecast
+            roll-out (the prefix forward pass keeps alpha/theta). Setting
+            alpha_fc=1.0 gives a deterministic walk-forward through the chain
+            while the context pass still smooths with alpha<1. Default (None)
+            reuses alpha/theta, recovering the original single-alpha behavior.
 
         Returns
         -------
@@ -400,10 +408,15 @@ class GenerativeDenseChainTimeSeries:
             #raise ValueError("End state distribution has zero mass after zeroing last state.")
         end_dist = end_dist / total
 
+        # Dual-alpha: the forecast roll-out may use a different (alpha, theta)
+        # than the context forward pass above. Default reuses alpha/theta.
+        a_fc = alpha if alpha_fc is None else alpha_fc
+        t_fc = theta if theta_fc is None else theta_fc
+
         current_dist = end_dist.copy()
         state_distributions = []
         for _ in range(n_steps):
-            current_dist = self._transition(current_dist, alpha=alpha, theta=theta, gamma=gamma, transition_type=transition_type)
+            current_dist = self._transition(current_dist, alpha=a_fc, theta=t_fc, gamma=gamma, transition_type=transition_type)
             state_distributions.append(current_dist.copy())
             current_dist[-1] = 0.0
             total = np.sum(current_dist)

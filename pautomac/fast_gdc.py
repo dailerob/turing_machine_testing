@@ -205,6 +205,117 @@ class BatchedGDCScorer:
         return log_p
 
 
+class BatchedDualGDCScorer(BatchedGDCScorer):
+    """Dual-α variant of BatchedGDCScorer.
+
+    At each step:
+      pred_state = transition(S, α_fc, θ_fc)  -- used to compute predictive
+      S          = transition(S, α_ctx, θ_ctx) -- advances state-tracking
+      filter S on observed symbol.
+
+    Setting α_fc=α_ctx and θ_fc=θ_ctx recovers BatchedGDCScorer. The
+    "α_fc=1, θ_fc=0 + soft α_ctx" recipe found on char-LM and HMM
+    forecasting tasks consistently helps when the dynamics have a
+    deterministic-advance component.
+    """
+
+    def __init__(self, alpha_ctx, alpha_fc,
+                 theta_ctx=0.0, theta_fc=0.0,
+                 transition_type='self_loop',
+                 initial_dist='sequence_starts',
+                 dtype=np.float32):
+        super().__init__(alpha=alpha_ctx, theta=theta_ctx,
+                          transition_type=transition_type,
+                          initial_dist=initial_dist, dtype=dtype)
+        self.alpha_ctx = float(alpha_ctx); self.theta_ctx = float(theta_ctx)
+        self.alpha_fc = float(alpha_fc); self.theta_fc = float(theta_fc)
+        self.name = (f"fastgdc-ac{alpha_ctx}-af{alpha_fc}"
+                     f"-tc{theta_ctx}-tf{theta_fc}-1step")
+
+    def fit(self, train_seqs, alphabet_size):
+        super().fit(train_seqs, alphabet_size)
+        n = self.n
+        if n > 2:
+            self.diffuse_nt_fc = (1.0 - self.alpha_fc - self.theta_fc) / (n - 2)
+            self.diffuse_t_fc  = (1.0 - self.theta_fc) / (n - 1)
+        else:
+            self.diffuse_nt_fc = 0.0
+            self.diffuse_t_fc  = 0.0
+
+    def _transition_batch_with(self, S, alpha, theta, diffuse_nt, diffuse_t):
+        n = self.n
+        if n == 2:
+            return theta * S + (1.0 - theta) * np.roll(S, 1, axis=1)
+        nt_states = S * self.non_terminal_mask_f
+        t_states  = S * self.terminal_mask_f
+        shifted = np.zeros_like(S)
+        shifted[:, 1:] = nt_states[:, :-1]
+        nt_sum = nt_states.sum(axis=1, keepdims=True)
+        t_sum  = t_states.sum(axis=1, keepdims=True)
+        new_S = (
+            theta * S
+            + alpha * shifted
+            + diffuse_nt * (nt_sum - nt_states - shifted)
+            + diffuse_t * (t_sum - t_states)
+        )
+        if self.last_nt_idx >= 0:
+            new_S[:, 0] -= diffuse_nt * nt_states[:, self.last_nt_idx]
+        return new_S
+
+    def score_test_set(self, test_seqs):
+        end = self.end_token
+        seqs = [np.concatenate([s, [end]]).astype(np.int64)
+                for s in test_seqs]
+        B = len(seqs)
+        seq_lens = np.asarray([len(s) for s in seqs], dtype=np.int64)
+        max_len = int(seq_lens.max())
+        order = np.argsort(seq_lens)[::-1]
+        sorted_lens = seq_lens[order]
+        padded = -np.ones((B, max_len), dtype=np.int64)
+        for new_i, old_i in enumerate(order):
+            padded[new_i, :len(seqs[old_i])] = seqs[old_i]
+        S = np.tile(self.init_dist, (B, 1)).astype(self.dtype, copy=True)
+        log_p_sorted = np.zeros(B, dtype=np.float64)
+        for t in range(max_len):
+            k = int((sorted_lens > t).sum())
+            if k == 0:
+                break
+            if t > 0:
+                pred = self._transition_batch_with(
+                    S[:k], self.alpha_fc, self.theta_fc,
+                    self.diffuse_nt_fc, self.diffuse_t_fc)
+                S[:k] = self._transition_batch_with(
+                    S[:k], self.alpha_ctx, self.theta_ctx,
+                    self.diffuse_nt, self.diffuse_t)
+            else:
+                pred = S[:k]
+            syms_t = padded[:k, t]
+            unique_syms = np.unique(syms_t)
+            for a in unique_syms:
+                a_int = int(a)
+                rows = np.where(syms_t == a_int)[0]
+                if not (0 <= a_int < self.A_total):
+                    log_p_sorted[rows] += LOG_EPS
+                    S[rows] = self.dtype(1.0 / self.n)
+                    continue
+                mask_a = self.E_T[a_int]
+                if not mask_a.any():
+                    log_p_sorted[rows] += LOG_EPS
+                    S[rows] = self.dtype(1.0 / self.n)
+                    continue
+                q_pred = (pred[rows] @ mask_a).astype(np.float64)
+                log_p_sorted[rows] += np.log(np.maximum(q_pred, 1e-300))
+                sub = S[rows]
+                q_ctx = (sub @ mask_a).astype(np.float64)
+                safe_q = np.maximum(q_ctx, 1e-30).astype(self.dtype)
+                sub *= mask_a
+                sub /= safe_q[:, None]
+                S[rows] = sub
+        log_p = np.empty(B, dtype=np.float64)
+        log_p[order] = log_p_sorted
+        return log_p
+
+
 # ---------------------------------------------------------------------
 # Validation harness: compare batched vs naive log-probs
 # ---------------------------------------------------------------------

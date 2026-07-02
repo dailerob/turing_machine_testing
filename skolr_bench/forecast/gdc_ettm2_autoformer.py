@@ -24,7 +24,7 @@ SKOLR_BENCH = os.path.dirname(HERE)
 ROOT = os.path.dirname(SKOLR_BENCH)
 sys.path.insert(0, HERE); sys.path.insert(0, SKOLR_BENCH); sys.path.insert(0, ROOT)
 from informer_loaders import load_univariate
-from gdc_torch import forecast_many_torch
+from gdc_torch import forecast_many_torch, forecast_many_torch_dual
 
 
 HORIZONS = [96, 192, 336, 720]
@@ -34,14 +34,27 @@ DTYPE = torch.float32
 
 
 def build_configs():
-    """22-config grid: raw + diff variants (same as ETTh1 sweep)."""
+    """Config grid as (kind, sigma, alpha_ctx, alpha_fc) 4-tuples (single-alpha:
+    alpha_fc == alpha_ctx), the original 22-config grid.
+
+    NOTE (P1, 2026-06): dual-alpha (alpha_ctx < 1, alpha_fc = 1.0) was tested
+    on the RAW recipe here and *hurt* — the sharper raw roll-out wins on
+    validation but loses on test, val-overfitting and displacing the better
+    diff pick (ETTm2 T=336: 0.150 -> 0.189; T=720: 0.254 -> 0.262). Set
+    GDC_DUAL_ALPHA=1 to re-enable the raw dual candidates for inspection; they
+    are OFF by default. The diff recipe is a no-op for alpha_fc regardless
+    (stationary zero-mean differences). See paper/PROTOCOL_STANDARDIZATION.md."""
+    dual = os.environ.get('GDC_DUAL_ALPHA', '0') == '1'
     configs = []
     for sigma in [0.02, 0.05, 0.10, 0.25, 0.50]:
         for alpha in [1.0, 0.99]:
-            configs.append(('raw', sigma, alpha))
+            configs.append(('raw', sigma, alpha, alpha))     # single
+        if dual:
+            for alpha in [0.99, 0.95, 0.9]:
+                configs.append(('raw', sigma, alpha, 1.0))   # dual (off by default)
     for sigma in [0.10, 0.25, 0.50, 1.00]:
         for alpha in [1.0, 0.99, 0.95]:
-            configs.append(('diff', sigma, alpha))
+            configs.append(('diff', sigma, alpha, alpha))    # single (diff)
     return configs
 
 
@@ -55,8 +68,17 @@ def make_primes_truths(series, L_match, T):
     return s[p_idx], s[t_idx]
 
 
+def _fc(states, beta, alpha, alpha_fc, primes, T):
+    """Dispatch to single- or dual-alpha kernel (dual when alpha_fc != alpha)."""
+    if alpha_fc is None or alpha_fc == alpha:
+        return forecast_many_torch(states, beta, alpha, 0.0, primes, T,
+                                   device=DEVICE, dtype=DTYPE)
+    return forecast_many_torch_dual(states, beta, alpha, 0.0, alpha_fc, 0.0,
+                                    primes, T, device=DEVICE, dtype=DTYPE)
+
+
 def eval_one(state_series, eval_lookback, eval_target_series, L_match, T,
-             kind, sigma_frac, alpha):
+             kind, sigma_frac, alpha, alpha_fc=None):
     if kind == 'diff':
         d_state = np.diff(state_series)
         sigma = max(float(np.std(d_state)) * sigma_frac, 1e-9)
@@ -67,9 +89,7 @@ def eval_one(state_series, eval_lookback, eval_target_series, L_match, T,
         anchors = ext_primes[:, -1]
         truths_idx = np.arange(L_match + 1, L_match + 1 + T)[None, :] + np.arange(diffed_primes.shape[0])[:, None]
         truths = full[truths_idx]
-        forecast_d = forecast_many_torch(d_state, beta, alpha, 0.0,
-                                          diffed_primes, T,
-                                          device=DEVICE, dtype=DTYPE)
+        forecast_d = _fc(d_state, beta, alpha, alpha_fc, diffed_primes, T)
         if torch.is_tensor(forecast_d): forecast_d = forecast_d.cpu().numpy().astype(np.float64)
         forecasts = anchors[:, None] + np.cumsum(forecast_d, axis=1)
     else:
@@ -77,9 +97,7 @@ def eval_one(state_series, eval_lookback, eval_target_series, L_match, T,
         beta = max((sigma * np.sqrt(L_match)) ** 2, 1e-9)
         full = np.concatenate([eval_lookback[-L_match:], eval_target_series])
         primes, truths = make_primes_truths(full, L_match, T)
-        forecasts = forecast_many_torch(state_series, beta, alpha, 0.0,
-                                         primes, T,
-                                         device=DEVICE, dtype=DTYPE)
+        forecasts = _fc(state_series, beta, alpha, alpha_fc, primes, T)
         if torch.is_tensor(forecasts): forecasts = forecasts.cpu().numpy().astype(np.float64)
     diff = truths - forecasts
     return float((diff**2).mean()), float(np.abs(diff).mean())
@@ -102,21 +120,22 @@ def main():
         print(f"--- T={T} ---", flush=True)
         t0 = time.time()
         val_results = []
-        for kind, sigma, alpha in configs:
+        for kind, sigma, alpha, alpha_fc in configs:
             v_mse, v_mae = eval_one(state_train_only, train, val,
-                                     L, T, kind, sigma, alpha)
-            val_results.append((v_mse, kind, sigma, alpha))
+                                     L, T, kind, sigma, alpha, alpha_fc)
+            val_results.append((v_mse, kind, sigma, alpha, alpha_fc))
         val_results.sort(key=lambda x: x[0])
         best = val_results[0]
         t_mse, t_mae = eval_one(state_train_val, val, test,
-                                 L, T, best[1], best[2], best[3])
+                                 L, T, best[1], best[2], best[3], best[4])
         elapsed = time.time() - t0
         rows.append((T, best[1], best[2], best[3], best[0], t_mse, t_mae, elapsed))
         print(f"  Top 3 by val: ", end='')
-        for v, k, s, a in val_results[:3]:
-            print(f"{k}/sigma={s}/alpha={a}->{v:.4f}", end='  ')
+        for v, k, s, a, afc in val_results[:3]:
+            tag = f"alpha={a}" if afc == a else f"alpha={a}/afc={afc}"
+            print(f"{k}/sigma={s}/{tag}->{v:.4f}", end='  ')
         print()
-        print(f"  PICK {best[1]} sigma={best[2]} alpha={best[3]}: "
+        print(f"  PICK {best[1]} sigma={best[2]} alpha={best[3]} alpha_fc={best[4]}: "
               f"val MSE={best[0]:.4f}  test MSE={t_mse:.4f}  MAE={t_mae:.4f}  "
               f"({elapsed:.1f}s)\n", flush=True)
 

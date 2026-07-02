@@ -280,3 +280,92 @@ class GDCModel:
             new_dist[idx] = dist[idx] / q
             dist = new_dist
         return log_p
+
+
+# --------------------------------------------------------------------
+# Parrot, HPYLM, PPM-D wrappers
+# --------------------------------------------------------------------
+# Each of these uses an alphabet of size (alphabet_size + 1) including
+# the END token. log_prob(seq) returns the natural log of
+# P(seq[0]) * P(seq[1]|seq[0]) * ... * P(seq[L-1] | prefix) * P(END | seq).
+class ParrotModel:
+    def __init__(self, L=3, K=10, alpha_prior=1.0):
+        self.L = L; self.K = K; self.alpha_prior = alpha_prior
+        self.name = f'parrot-L{L}-K{K}-a{alpha_prior}'
+
+    def fit(self, train_seqs, alphabet_size):
+        from discrete_parrot import DiscreteParrotPool
+        self.A = alphabet_size + 1
+        self.end_token = alphabet_size
+        seqs = append_end(train_seqs, self.end_token)
+        self.pool = DiscreteParrotPool(seqs, alphabet_size=self.A,
+                                       L=self.L)
+
+    def log_prob(self, seq):
+        full = np.concatenate([seq, [self.end_token]]).astype(np.int64)
+        log_p = 0.0
+        for t in range(len(full)):
+            prefix = full[:t]
+            dist = self.pool.predict_distribution(
+                prefix, h=1, K=self.K, alpha_prior=self.alpha_prior)
+            p = float(dist[int(full[t])])
+            log_p += np.log(p) if p > 0 else LOG_EPS
+        return log_p
+
+
+class HPYLMModel:
+    def __init__(self, max_depth=4, discount=0.5, concentration=1.0,
+                 alpha_prior=0.01, seed=0):
+        self.max_depth = max_depth; self.discount = discount
+        self.concentration = concentration
+        self.alpha_prior = alpha_prior; self.seed = seed
+        self.name = f'hpylm-D{max_depth}-d{discount}-c{concentration}'
+
+    def fit(self, train_seqs, alphabet_size):
+        from discrete_hpylm import HPYLMPool
+        self.A = alphabet_size + 1
+        self.end_token = alphabet_size
+        seqs = append_end(train_seqs, self.end_token)
+        self.pool = HPYLMPool(seqs, alphabet_size=self.A,
+                              max_depth=self.max_depth,
+                              discount=self.discount,
+                              concentration=self.concentration,
+                              seed=self.seed)
+
+    def log_prob(self, seq):
+        full = np.concatenate([seq, [self.end_token]]).astype(np.int64)
+        log_p = 0.0
+        for t in range(len(full)):
+            prefix = full[:t]
+            dist = self.pool.predict_distribution(
+                prefix, h=1, alpha_prior=self.alpha_prior)
+            p = float(dist[int(full[t])])
+            log_p += np.log(p) if p > 0 else LOG_EPS
+        return log_p
+
+
+class PPMModel:
+    def __init__(self, max_depth=4, discount=0.5, alpha_prior=0.01):
+        self.max_depth = max_depth; self.discount = discount
+        self.alpha_prior = alpha_prior
+        self.name = f'ppm-D{max_depth}-d{discount}'
+
+    def fit(self, train_seqs, alphabet_size):
+        from discrete_ppm import PPMPool
+        self.A = alphabet_size + 1
+        self.end_token = alphabet_size
+        seqs = append_end(train_seqs, self.end_token)
+        self.pool = PPMPool(seqs, alphabet_size=self.A,
+                            max_depth=self.max_depth,
+                            discount=self.discount)
+
+    def log_prob(self, seq):
+        full = np.concatenate([seq, [self.end_token]]).astype(np.int64)
+        log_p = 0.0
+        for t in range(len(full)):
+            prefix = full[:t]
+            dist = self.pool.predict_distribution(
+                prefix, h=1, alpha_prior=self.alpha_prior)
+            p = float(dist[int(full[t])])
+            log_p += np.log(p) if p > 0 else LOG_EPS
+        return log_p

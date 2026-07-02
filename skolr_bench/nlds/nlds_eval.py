@@ -29,8 +29,12 @@ SEQ_LEN = 96   # L  (SKOLR run_longExp default)
 PRED_LEN = 96  # T
 
 
-def gdc_raw_forecast(history, window_len, sigma_frac, alpha, theta, h):
-    """GDC-TS on raw 1-D history. Returns h-step forecast."""
+def gdc_raw_forecast(history, window_len, sigma_frac, alpha, theta, h,
+                     alpha_fc=None):
+    """GDC-TS on raw 1-D history. Returns h-step forecast.
+
+    alpha_fc (optional) sets a separate forecast-roll-out alpha (dual-alpha);
+    None reuses alpha (single-alpha)."""
     history = np.asarray(history, dtype=np.float64)
     if len(history) < window_len + 1:
         return np.full(h, history[-1])
@@ -46,7 +50,7 @@ def gdc_raw_forecast(history, window_len, sigma_frac, alpha, theta, h):
         terminal_behavior='absorb',
         initial_dist='uniform')
     prime = history[-window_len:].reshape(-1, 1)
-    _, sd = gdc.forecast_gdc_style(prime, n_steps=h)
+    _, sd = gdc.forecast_gdc_style(prime, n_steps=h, alpha_fc=alpha_fc)
     nt = (~gdc.terminal_mask).astype(float)
     sd_nt = sd * nt[None, :]
     sd_sum = sd_nt.sum(axis=1, keepdims=True)
@@ -54,7 +58,8 @@ def gdc_raw_forecast(history, window_len, sigma_frac, alpha, theta, h):
     return ((sd_nt / safe) @ gdc.states)[:, 0]
 
 
-def gdc_diff_forecast(history, window_len, sigma_frac, alpha, theta, h):
+def gdc_diff_forecast(history, window_len, sigma_frac, alpha, theta, h,
+                      alpha_fc=None):
     history = np.asarray(history, dtype=np.float64)
     if len(history) < window_len + 2:
         return np.full(h, history[-1])
@@ -73,7 +78,7 @@ def gdc_diff_forecast(history, window_len, sigma_frac, alpha, theta, h):
         terminal_behavior='absorb',
         initial_dist='uniform')
     prime = d[-window_len:].reshape(-1, 1)
-    _, sd = gdc.forecast_gdc_style(prime, n_steps=h)
+    _, sd = gdc.forecast_gdc_style(prime, n_steps=h, alpha_fc=alpha_fc)
     nt = (~gdc.terminal_mask).astype(float)
     sd_nt = sd * nt[None, :]
     sd_sum = sd_nt.sum(axis=1, keepdims=True)
@@ -83,17 +88,32 @@ def gdc_diff_forecast(history, window_len, sigma_frac, alpha, theta, h):
 
 
 # Candidate configs: raw + diff, alpha sweep, sigma sweep.
+# NOTE (P1, 2026-06): dual-alpha (alpha_ctx < 1, alpha_fc = 1.0) was tested and
+# is NEUTRAL on NLDS — the val-pick selects equivalent configs and the results
+# are identical to single-alpha (pendulum 0.0003, duffing 0.0005, LV 0.0000,
+# lorenz 1.171). It is therefore OFF by default (set GDC_DUAL_ALPHA=1 to add the
+# dual candidates). Diff is a no-op for alpha_fc regardless; dual-alpha actively
+# helps only TM and dysts. See paper/PROTOCOL_STANDARDIZATION.md.
+_DUAL = os.environ.get('GDC_DUAL_ALPHA', '0') == '1'
 CONFIGS = []
 for L in [48, 96]:
     for s in [0.05, 0.1, 0.25]:
         for a in [1.0, 0.99, 0.95, 0.9]:
             CONFIGS.append(('raw', dict(window_len=L, sigma_frac=s,
-                                         alpha=a, theta=0.0)))
+                                         alpha=a, theta=0.0, alpha_fc=a)))
+        if _DUAL:
+            for a in [0.99, 0.95, 0.9]:
+                CONFIGS.append(('raw', dict(window_len=L, sigma_frac=s,
+                                             alpha=a, theta=0.0, alpha_fc=1.0)))
 for L in [48, 96]:
     for s in [0.25, 0.5, 1.0]:
         for a in [1.0, 0.99, 0.95, 0.9]:
             CONFIGS.append(('diff', dict(window_len=L, sigma_frac=s,
-                                          alpha=a, theta=0.0)))
+                                          alpha=a, theta=0.0, alpha_fc=a)))
+        if _DUAL:
+            for a in [0.99, 0.95, 0.9]:
+                CONFIGS.append(('diff', dict(window_len=L, sigma_frac=s,
+                                              alpha=a, theta=0.0, alpha_fc=1.0)))
 
 
 def predict(kind, cfg, history, h):

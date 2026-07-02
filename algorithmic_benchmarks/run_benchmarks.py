@@ -33,8 +33,11 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "chmm_tests", "naturecomm_cscg"))
 
 import parity_tm, increment_tm, reverse_tm, dyck1  # noqa: E402
+import shift_left_tm, bit_count_mod3_tm, anbn_tm   # noqa: E402
+import palindrome_tm, subtraction_tm               # noqa: E402
 from _tm_common import apply_noread_to_runs  # noqa: E402
 from generative_dense_chain import GenerativeDenseChain  # noqa: E402
+from torch_tm_adapters import TorchTMGDC                  # noqa: E402
 from chmm_actions import CHMM, forward  # noqa: E402
 from binary_alphabet_adder import (  # noqa: E402
     simulate_random_binary_alphabet_adders, BINARY_ALPHABET_ADDER)
@@ -136,6 +139,57 @@ def chmm_eval_tm_reduced(model, test_tapes, tuple_to_id, id_to_tuple,
 # --------------------------------------------------------------------
 # GDC helpers (TM tasks, Reduced 3-col)
 # --------------------------------------------------------------------
+def encode_reduced_for_torch(tape, tuple_to_id):
+    """Convert a raw TM tape (Nx5) to single-int reduced-alphabet ids."""
+    out = []
+    for row in tape:
+        if int(row[0]) == -1:
+            continue
+        key = (int(row[1]), int(row[2]), int(row[3]))
+        if key in tuple_to_id:
+            out.append(tuple_to_id[key])
+    return np.asarray(out, dtype=np.int64)
+
+
+def torch_gdc_eval_tm_reduced(gdc, test_tapes, tuple_to_id, id_to_tuple):
+    """Same protocol as gdc_eval_tm_reduced, using TorchTMGDC.
+
+    For (T,3) GenerativeDenseChain with self_loop_two_step + gamma=0,
+    this is mathematically equivalent (verified empirically) to the
+    reduced-alphabet TorchTMGDC with self_loop."""
+    by_read = {}
+    for tid, tup in enumerate(id_to_tuple):
+        by_read.setdefault(tup[0], []).append(tid)
+    correct = np.zeros(3, dtype=np.int64)
+    total = np.zeros(3, dtype=np.int64)
+    tuple_errors, perfect = 0, 0
+
+    encoded = [encode_reduced_for_torch(t, tuple_to_id) for t in test_tapes]
+    valid = [(i, x) for i, x in enumerate(encoded) if len(x) >= 2]
+    perfect += sum(1 for x in encoded if len(x) < 2)
+    if not valid:
+        return correct / np.maximum(total, 1), total, tuple_errors, perfect
+    indices, xs = zip(*valid)
+    actuals_per_tape = [
+        [id_to_tuple[int(x[t + 1])][0] for t in range(len(x) - 1)]
+        for x in xs]
+    all_preds = gdc.score_tapes_batched(list(xs), actuals_per_tape, by_read)
+    for x, preds in zip(xs, all_preds):
+        tape_err = 0
+        for t in range(len(x) - 1):
+            actual_tup = id_to_tuple[int(x[t + 1])]
+            pred_tup = id_to_tuple[int(preds[t])]
+            for pos in range(3):
+                total[pos] += 1
+                if pred_tup[pos] == actual_tup[pos]:
+                    correct[pos] += 1
+            if pred_tup != actual_tup:
+                tape_err += 1; tuple_errors += 1
+        if tape_err == 0:
+            perfect += 1
+    return correct / np.maximum(total, 1), total, tuple_errors, perfect
+
+
 def gdc_eval_tm_reduced(gdc, test_tapes):
     correct = np.zeros(3, dtype=np.int64)
     total = np.zeros(3, dtype=np.int64)
@@ -261,16 +315,25 @@ def run_tm_task(name, module, train_range, test_range,
 
     rows = []
 
-    # GDC
-    train_red = [t[:, 1:4][t[:, 0] != -1].astype(np.int64) for t in tr['runs']]
-    train_red = [t for t in train_red if len(t) > 0]
+    # GDC (torch reduced-alphabet path; equivalent to numpy (T,3)
+    # with self_loop_two_step gamma=0 — verified.)
+    train_red_int = [encode_reduced_for_torch(t, tuple_to_id)
+                     for t in tr['runs']]
+    train_red_int = [s for s in train_red_int if len(s) > 0]
     t0 = time.time()
-    gdc = GenerativeDenseChain(train_red, **GDC_PARAMS)
+    gdc = TorchTMGDC(alpha=GDC_PARAMS['alpha'],
+                     theta=GDC_PARAMS['theta'],
+                     beta=GDC_PARAMS.get('beta', 0.0),
+                     transition_type='self_loop',
+                     initial_dist=GDC_PARAMS['initial_dist'],
+                     terminal_behavior=GDC_PARAMS.get('terminal_behavior', 'diffuse'))
+    gdc.fit(train_red_int, alphabet_size=nA)
     gdc_train_t = time.time() - t0
-    log(f"  GDC built: {gdc.n_states} hidden states "
+    log(f"  GDC built: {gdc.N} hidden states "
         f"(train={gdc_train_t:.2f}s)")
     t0 = time.time()
-    acc, total, terr, perf = gdc_eval_tm_reduced(gdc, te['runs'])
+    acc, total, terr, perf = torch_gdc_eval_tm_reduced(
+        gdc, te['runs'], tuple_to_id, id_to_tuple)
     gdc_eval_t = time.time() - t0
     n_pred = int(total[0])
     log(f"  GDC acc: read={acc[0]:.4f} write={acc[1]:.4f} dir={acc[2]:.4f} "
@@ -280,7 +343,7 @@ def run_tm_task(name, module, train_range, test_range,
         f"(eval={gdc_eval_t:.1f}s)")
     rows.append(dict(task=name, variant=variant, model='GDC',
                      K_or_alpha='alpha=0.99',
-                     n_states=gdc.n_states, train_s=gdc_train_t,
+                     n_states=gdc.N, train_s=gdc_train_t,
                      eval_s=gdc_eval_t, acc_read=acc[0], acc_write=acc[1],
                      acc_dir=acc[2], mean_acc=acc.mean(),
                      tuple_errors=terr, n_predictions=n_pred,
@@ -370,16 +433,24 @@ def run_binary_adder_task(log, variant='original',
     log(f"    tuples: {id_to_tuple}")
 
     rows = []
-    train_red = [t[:, 1:4][t[:, 0] != -1].astype(np.int64)
-                 for t in tr['runs']]
-    train_red = [t for t in train_red if len(t) > 0]
+    # GDC (torch reduced-alphabet path)
+    train_red_int = [encode_reduced_for_torch(t, tuple_to_id)
+                     for t in tr['runs']]
+    train_red_int = [s for s in train_red_int if len(s) > 0]
     t0 = time.time()
-    gdc = GenerativeDenseChain(train_red, **GDC_PARAMS)
+    gdc = TorchTMGDC(alpha=GDC_PARAMS['alpha'],
+                     theta=GDC_PARAMS['theta'],
+                     beta=GDC_PARAMS.get('beta', 0.0),
+                     transition_type='self_loop',
+                     initial_dist=GDC_PARAMS['initial_dist'],
+                     terminal_behavior=GDC_PARAMS.get('terminal_behavior', 'diffuse'))
+    gdc.fit(train_red_int, alphabet_size=nA)
     gdc_train_t = time.time() - t0
-    log(f"  GDC built: {gdc.n_states} hidden states "
+    log(f"  GDC built: {gdc.N} hidden states "
         f"(train={gdc_train_t:.2f}s)")
     t0 = time.time()
-    acc, total, terr, perf = gdc_eval_tm_reduced(gdc, te['runs'])
+    acc, total, terr, perf = torch_gdc_eval_tm_reduced(
+        gdc, te['runs'], tuple_to_id, id_to_tuple)
     gdc_eval_t = time.time() - t0
     n_pred = int(total[0])
     log(f"  GDC acc: read={acc[0]:.4f} write={acc[1]:.4f} "
@@ -389,7 +460,7 @@ def run_binary_adder_task(log, variant='original',
         f"(eval={gdc_eval_t:.1f}s)")
     rows.append(dict(task=name, variant=variant, model='GDC',
                      K_or_alpha='alpha=0.99',
-                     n_states=gdc.n_states, train_s=gdc_train_t,
+                     n_states=gdc.N, train_s=gdc_train_t,
                      eval_s=gdc_eval_t, acc_read=acc[0],
                      acc_write=acc[1], acc_dir=acc[2],
                      mean_acc=acc.mean(),
@@ -518,6 +589,26 @@ def main():
                             max_steps=10000, log=log, variant=variant)
         rows += run_binary_adder_task(log=log, variant=variant,
                                       n_train=200, n_test=10)
+        rows += run_tm_task('shift_left', shift_left_tm,
+                            train_range=(3, 8), test_range=(16, 32),
+                            n_train=300, n_test=20, max_steps=200,
+                            log=log, variant=variant)
+        rows += run_tm_task('bit_count_mod3', bit_count_mod3_tm,
+                            train_range=(3, 8), test_range=(16, 32),
+                            n_train=300, n_test=20, max_steps=200,
+                            log=log, variant=variant)
+        rows += run_tm_task('anbn', anbn_tm,
+                            train_range=(2, 10), test_range=(12, 24),
+                            n_train=300, n_test=20, max_steps=10000,
+                            log=log, variant=variant)
+        rows += run_tm_task('palindrome', palindrome_tm,
+                            train_range=(3, 8), test_range=(10, 16),
+                            n_train=300, n_test=20, max_steps=10000,
+                            log=log, variant=variant)
+        rows += run_tm_task('subtraction', subtraction_tm,
+                            train_range=(1, 5), test_range=(6, 10),
+                            n_train=300, n_test=20, max_steps=200000,
+                            log=log, variant=variant)
     rows += run_dyck_task(log=log)
 
     out_csv = os.path.join(HERE, 'benchmark_results.csv')

@@ -211,3 +211,23 @@ pautomac/results/
 # Cloned third-party repos (see per-folder READMEs for clone instructions)
 skolr_bench/Informer2020/
 chmm_tests/naturecomm_cscg/
+
+# ----- generated artifacts (regenerable; keep source + writeups only) -----
+# All result CSVs are regenerable from scripts; headline numbers live in the
+# per-folder *_RESULTS.md writeups. (The tracked test.csv fixture is kept —
+# .gitignore does not untrack already-committed files.)
+*.csv
+
+# Benchmark run logs
+**/benchmark_log.txt
+**/*_benchmark_log*.txt
+
+# char-LM corpora (re-downloadable per char_lm README)
+char_lm/data/
+*.tar.gz
+
+# Dataset dirs symlinked into the main checkout (absolute-path symlinks; the
+# trailing-slash rules above don't match symlinks)
+m4/data
+skolr_bench/data_original
+dysts_bench/data

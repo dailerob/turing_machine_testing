@@ -126,6 +126,273 @@ def forecast_many_torch(states_1d, beta, alpha, theta, primes, T,
     return forecasts
 
 
+def forecast_many_torch_dual(states_1d, beta, alpha, theta,
+                                alpha_fc, theta_fc, primes, T,
+                                device='cuda', dtype=torch.float64):
+    """Dual-α variant of `forecast_many_torch`.
+
+    The prefix forward pass uses `(alpha, theta)`; the forecast roll-out
+    uses `(alpha_fc, theta_fc)`. Setting alpha_fc=alpha and theta_fc=theta
+    recovers the single-α scorer exactly.
+    """
+    states = torch.as_tensor(states_1d, dtype=dtype, device=device)
+    primes = torch.as_tensor(primes, dtype=dtype, device=device)
+    N = states.shape[0]
+    B, L = primes.shape
+    if N < 3:
+        return primes[:, -1:].expand(B, T).clone()
+
+    terminal_idx = N - 1
+    last_nt_idx = N - 2
+    beta_nt_ctx = (1.0 - alpha    - theta   ) / (N - 2)
+    beta_nt_fc  = (1.0 - alpha_fc - theta_fc) / (N - 2)
+    log_norm_const = -0.5 * math.log(2.0 * math.pi * beta)
+    inv_2beta = 1.0 / (2.0 * beta)
+    tiny = torch.finfo(dtype).tiny
+
+    log_dist = torch.full((B, N), -math.log(N), dtype=dtype, device=device)
+
+    # Forward pass uses (alpha, theta)
+    for t in range(L):
+        if t > 0:
+            mx = log_dist.max(dim=1, keepdim=True).values
+            lin = torch.exp(log_dist - mx)
+            lin = lin / lin.sum(dim=1, keepdim=True)
+            lin = _trans_self_loop_absorb(lin, alpha, theta, beta_nt_ctx,
+                                           last_nt_idx, terminal_idx)
+            log_dist = torch.log(lin + tiny)
+        obs = primes[:, t:t+1]
+        sq = (states[None, :] - obs) ** 2
+        log_dist = log_dist + (-sq * inv_2beta + log_norm_const)
+        m = log_dist.max(dim=1, keepdim=True).values
+        lse = m + torch.log(torch.exp(log_dist - m).sum(dim=1, keepdim=True))
+        log_dist = log_dist - lse
+
+    cur = torch.exp(log_dist)
+    cur[:, terminal_idx] = 0.0
+    s = cur.sum(dim=1, keepdim=True)
+    bad = (s.squeeze(1) <= 0)
+    if bool(bad.any()):
+        cur[bad] = 1.0 / N
+        s = cur.sum(dim=1, keepdim=True)
+    cur = cur / s
+
+    # Forecast loop uses (alpha_fc, theta_fc)
+    forecasts = torch.empty((B, T), dtype=dtype, device=device)
+    for step in range(T):
+        nxt = _trans_self_loop_absorb(cur, alpha_fc, theta_fc, beta_nt_fc,
+                                       last_nt_idx, terminal_idx)
+        nt = nxt.clone()
+        nt[:, terminal_idx] = 0.0
+        nt_sum = nt.sum(dim=1, keepdim=True)
+        safe = torch.where(nt_sum > 1e-12, nt_sum, torch.ones_like(nt_sum))
+        forecasts[:, step] = (nt / safe @ states)
+        nxt[:, terminal_idx] = 0.0
+        s2 = nxt.sum(dim=1, keepdim=True)
+        mask2 = (s2.squeeze(1) > 0)
+        if bool(mask2.any()):
+            nxt = torch.where(s2 > 0, nxt / s2, nxt)
+        cur = nxt
+
+    return forecasts
+
+
+def forecast_many_torch_dual_batched(
+        states_1d, beta, alphas, thetas, alphas_fc, thetas_fc,
+        primes, T, device='cuda', dtype=torch.float64):
+    """Same kernel as forecast_many_torch_dual, but batches over multiple
+    (α, θ, α_fc, θ_fc) configs that share the same state space and prime.
+
+    Parameters
+    ----------
+    states_1d : (N,) state values.
+    beta : float — emission variance (shared across batch).
+    alphas, thetas, alphas_fc, thetas_fc : (B,) tensors or lists.
+    primes : (B, L) — one prime per config. (Pass the same prime
+        broadcast across B configs.)
+    T : forecast horizon.
+
+    Returns (B, T) forecasts.
+    """
+    states = torch.as_tensor(states_1d, dtype=dtype, device=device)
+    primes_t = torch.as_tensor(primes, dtype=dtype, device=device)
+    a    = torch.as_tensor(alphas,    dtype=dtype, device=device).view(-1, 1)
+    th   = torch.as_tensor(thetas,    dtype=dtype, device=device).view(-1, 1)
+    a_fc = torch.as_tensor(alphas_fc, dtype=dtype, device=device).view(-1, 1)
+    th_fc= torch.as_tensor(thetas_fc, dtype=dtype, device=device).view(-1, 1)
+    N = states.shape[0]
+    B, L = primes_t.shape
+    if N < 3:
+        return primes_t[:, -1:].expand(B, T).clone()
+    terminal_idx = N - 1
+    last_nt_idx = N - 2
+    beta_nt_ctx = (1.0 - a    - th   ) / (N - 2)
+    beta_nt_fc  = (1.0 - a_fc - th_fc) / (N - 2)
+    log_norm_const = -0.5 * math.log(2.0 * math.pi * beta)
+    inv_2beta = 1.0 / (2.0 * beta)
+    tiny = torch.finfo(dtype).tiny
+
+    def trans(dist, alpha_, theta_, beta_nt_):
+        nt = dist.clone()
+        nt[:, terminal_idx] = 0.0
+        non_terminal_sum = nt.sum(dim=1, keepdim=True)
+        last_nt_val = nt[:, last_nt_idx]                # (B,)
+        shifted = torch.zeros_like(dist)
+        shifted[:, 1:] = nt[:, :N - 1]
+        out = theta_ * dist + alpha_ * shifted
+        out = out + beta_nt_ * (non_terminal_sum - nt - shifted)
+        out[:, 0] = out[:, 0] - beta_nt_.squeeze(-1) * last_nt_val
+        return out
+
+    log_dist = torch.full((B, N), -math.log(N), dtype=dtype, device=device)
+    for t in range(L):
+        if t > 0:
+            mx = log_dist.max(dim=1, keepdim=True).values
+            lin = torch.exp(log_dist - mx)
+            lin = lin / lin.sum(dim=1, keepdim=True)
+            lin = trans(lin, a, th, beta_nt_ctx)
+            log_dist = torch.log(lin + tiny)
+        obs = primes_t[:, t:t+1]
+        sq = (states[None, :] - obs) ** 2
+        log_dist = log_dist + (-sq * inv_2beta + log_norm_const)
+        m = log_dist.max(dim=1, keepdim=True).values
+        lse = m + torch.log(torch.exp(log_dist - m).sum(dim=1, keepdim=True))
+        log_dist = log_dist - lse
+
+    cur = torch.exp(log_dist)
+    cur[:, terminal_idx] = 0.0
+    s = cur.sum(dim=1, keepdim=True)
+    bad = (s.squeeze(1) <= 0)
+    if bool(bad.any()):
+        cur[bad] = 1.0 / N
+        s = cur.sum(dim=1, keepdim=True)
+    cur = cur / s
+
+    forecasts = torch.empty((B, T), dtype=dtype, device=device)
+    for step in range(T):
+        nxt = trans(cur, a_fc, th_fc, beta_nt_fc)
+        nt = nxt.clone()
+        nt[:, terminal_idx] = 0.0
+        nt_sum = nt.sum(dim=1, keepdim=True)
+        safe = torch.where(nt_sum > 1e-12, nt_sum, torch.ones_like(nt_sum))
+        forecasts[:, step] = (nt / safe @ states)
+        nxt[:, terminal_idx] = 0.0
+        s2 = nxt.sum(dim=1, keepdim=True)
+        mask2 = (s2.squeeze(1) > 0)
+        if bool(mask2.any()):
+            nxt = torch.where(s2 > 0, nxt / s2, nxt)
+        cur = nxt
+    return forecasts
+
+
+@torch.no_grad()
+def forecast_dual_xseries(states_padded, terminal_idx, betas,
+                            alpha, theta, alpha_fc, theta_fc,
+                            primes, T, device='cuda', dtype=torch.float64):
+    """Cross-series batched dual-α GDC forecast.
+
+    Runs B series with possibly-different state spaces in a single torch
+    call, all sharing one (alpha, theta, alpha_fc, theta_fc) config. Per
+    series, beta (emission variance) may vary. State spaces are padded
+    to N_max with masking; the absorbing terminal is at `terminal_idx[b]`
+    for series b. Primes are length-L (same L for all batch elements;
+    pad short primes to L externally if needed).
+
+    Parameters
+    ----------
+    states_padded : (B, N_max) float — per-series state values, padded
+        with arbitrary values past position `terminal_idx[b]` (those are
+        masked out and never receive mass).
+    terminal_idx : (B,) long — position of the absorbing terminal in
+        each series. The non-terminal positions are [0, terminal_idx[b]).
+    betas : (B,) float — per-series emission variance.
+    alpha, theta, alpha_fc, theta_fc : floats (shared across batch).
+    primes : (B, L) float.
+    T : int — forecast horizon.
+
+    Returns (B, T) forecasts.
+    """
+    import math
+    sp = torch.as_tensor(states_padded, dtype=dtype, device=device)
+    tid = torch.as_tensor(terminal_idx, dtype=torch.long, device=device)
+    bts = torch.as_tensor(betas, dtype=dtype, device=device)
+    pr = torch.as_tensor(primes, dtype=dtype, device=device)
+    B, N_max = sp.shape
+    L = pr.shape[1]
+    real_lengths = (tid + 1).to(dtype)               # (B,)
+    real_lengths_int = (tid + 1).to(torch.long)
+
+    pos = torch.arange(N_max, device=device).unsqueeze(0)    # (1, N_max)
+    valid_mask = (pos < real_lengths_int.unsqueeze(1)).to(dtype)
+    terminal_mask_bool = (pos == tid.unsqueeze(1))
+    non_terminal_mask = valid_mask * (1.0 - terminal_mask_bool.to(dtype))
+    last_nt_idx = (tid - 1).clamp(min=0)                       # (B,)
+
+    beta_nt_ctx = ((1.0 - alpha    - theta   ) / (real_lengths - 2)).unsqueeze(1)
+    beta_nt_fc  = ((1.0 - alpha_fc - theta_fc) / (real_lengths - 2)).unsqueeze(1)
+
+    log_norm_const = -0.5 * torch.log(2.0 * math.pi * bts)     # (B,)
+    inv_2beta = (1.0 / (2.0 * bts)).unsqueeze(1)               # (B, 1)
+    tiny = torch.finfo(dtype).tiny
+    SENT = -1e30  # sentinel for padding in log space
+
+    def trans(dist, a_, t_, b_nt_):
+        nt = dist * non_terminal_mask
+        sum_nt = nt.sum(dim=1, keepdim=True)
+        last_nt_val = torch.gather(nt, 1, last_nt_idx.unsqueeze(1)).squeeze(1)
+        shifted = torch.zeros_like(dist)
+        shifted[:, 1:] = nt[:, :N_max - 1]
+        out = t_ * dist + a_ * shifted
+        out = out + b_nt_ * (sum_nt - nt - shifted)
+        out[:, 0] = out[:, 0] - b_nt_.squeeze(-1) * last_nt_val
+        out = out * valid_mask
+        return out
+
+    # Init log_dist: uniform over valid positions, sentinel in padding
+    log_dist = -torch.log(real_lengths.unsqueeze(1)).expand(B, N_max).clone()
+    log_dist = torch.where(valid_mask > 0, log_dist, torch.full_like(log_dist, SENT))
+
+    # Forward pass
+    for t in range(L):
+        if t > 0:
+            mx = log_dist.max(dim=1, keepdim=True).values
+            lin = torch.exp(log_dist - mx)
+            lin = lin / lin.sum(dim=1, keepdim=True)
+            lin = trans(lin, alpha, theta, beta_nt_ctx)
+            log_dist = torch.log(lin + tiny)
+        obs = pr[:, t:t+1]
+        sq = (sp - obs) ** 2
+        log_dist = log_dist + (-sq * inv_2beta + log_norm_const.unsqueeze(1))
+        log_dist = torch.where(valid_mask > 0, log_dist, torch.full_like(log_dist, SENT))
+        m = log_dist.max(dim=1, keepdim=True).values
+        lse = m + torch.log(torch.exp(log_dist - m).sum(dim=1, keepdim=True))
+        log_dist = log_dist - lse
+
+    cur = torch.exp(log_dist)
+    cur = cur.scatter(1, tid.unsqueeze(1), 0.0)  # zero terminal
+    cur = cur * valid_mask
+    s = cur.sum(dim=1, keepdim=True)
+    bad = (s.squeeze(1) <= 0)
+    if bool(bad.any()):
+        cur[bad] = valid_mask[bad] / real_lengths[bad].unsqueeze(1)
+        s = cur.sum(dim=1, keepdim=True)
+    cur = cur / s
+
+    forecasts = torch.empty((B, T), dtype=dtype, device=device)
+    for step in range(T):
+        nxt = trans(cur, alpha_fc, theta_fc, beta_nt_fc)
+        nt = nxt * non_terminal_mask
+        nt_sum = nt.sum(dim=1, keepdim=True)
+        safe = torch.where(nt_sum > 1e-12, nt_sum, torch.ones_like(nt_sum))
+        forecasts[:, step] = ((nt / safe) * sp).sum(dim=1)
+        nxt = nxt.scatter(1, tid.unsqueeze(1), 0.0)
+        nxt = nxt * valid_mask
+        s2 = nxt.sum(dim=1, keepdim=True)
+        nxt = torch.where(s2 > 0, nxt / s2, nxt)
+        cur = nxt
+    return forecasts
+
+
 def smoke_test():
     """Compare torch vs numba forecasts at realistic sizes."""
     import os, sys, time
